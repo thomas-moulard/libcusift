@@ -36,7 +36,7 @@
 # Add source files here
 EXECUTABLE	:= cusift
 # CUDA source files (compiled with cudacc)
-CUFILES		:= sift.cu
+CUFILES		:= sift.cu test.cu util.cu
 # CUDA dependency files
 #CU_DEPS		:= \
 #	template_kernel.cu \

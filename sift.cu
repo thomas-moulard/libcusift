@@ -436,9 +436,7 @@ Sift::detect_maxima ()
                     }
 
                   SiftKeypoint* k = keys + (n_keys ++);
-                  k->ix = x;
-                  k->iy = y;
-                  k->is = s;
+                  k->ix = x, k->iy = y, k->is = s;
                 }
               pt += 1;
             }
@@ -446,7 +444,7 @@ Sift::detect_maxima ()
         }
       pt += 2 * yo;
     }
-  std::cout << "-Detect maxima" << std::endl;
+  std::cout << "-Detect maxima (" << n_keys << " points detected)." << std::endl;
 }
 
 #define at(dx,dy,ds) (*( pt + (dx)*xo + (dy)*yo + (ds)*so))

@@ -80,6 +80,7 @@ protected:
   void detect ()
   {
     compute_dog ();
+    detect_maxima ();
     refine_maxima ();
   }
 

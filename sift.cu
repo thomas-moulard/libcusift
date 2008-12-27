@@ -39,14 +39,27 @@ Sift::Sift (const IplImage& src_, double pt, double te, double nt,
     dog_ (h_malloc<double> (s*(s_max-s_min))),
     gradient_ (h_malloc<double> (s*2*(s_max-s_min))),
     tmp_ (h_malloc<double> (s)),
-    im_ (h_malloc<double> (src_.width * src.height * sizeof (double)))
+    im_ (h_malloc<double> (src_.width * src.height * sizeof (double))),
+    filt_width_ (-1),
+    filt_sigma_ (-1.),
+    filt_res_ (-1),
+    filt_ (0),
+    expn_tab_ ()
 {
   std::cout << "Create SIFT filter with parameter:" << std::endl
-            << "* Number of octaves: " << O_ << std::endl
-            << "* Min octave: " << o_min_ << std::endl
-            << "* S: " << S_ << std::endl
+            << "* Number of octaves: " << O << std::endl
+            << "* Min octave: " << o_min << std::endl
+            << "* S: " << S << std::endl
             << "* Peak/Edge/Norm thresholds: " << pt << "/" << te << "/" << nt
             << std::endl;
+  std::cout << (s/sizeof (double))
+            << " / "
+            << s << " / "
+            << (s*(s_max-s_min+1)) << " / "
+            << (s*(s_max-s_min)) << " / "
+            << (src_.width * src.height * sizeof (double)) << std::endl;
+
+  fast_expn_init (expn_tab_);
 
   // Convert openCV image to double*
   int offset = 0;
@@ -57,12 +70,28 @@ Sift::Sift (const IplImage& src_, double pt, double te, double nt,
 
 Sift::~Sift ()
 {
-  free (keys);
+  std::cout << "+Sift::~Sift ()" << std::endl;
+
+  std::cout << "Free keys" << std::endl;
+  if (keys && n_keys)
+    free (keys);
+
+  std::cout << "Free image (double)" << std::endl;
   free (im_);
+
+  std::cout << "Free temp buffer" << std::endl;
   free (tmp_);
+  std::cout << "Free difference of gaussians" << std::endl;
   free (dog_);
+  std::cout << "Free gradient data" << std::endl;
   free (gradient_);
+  std::cout << "Free octave" << std::endl;
   free (octave_);
+
+  std::cout << "Free filter buffer" << std::endl;
+  if (!!filt_)
+    free (filt_);
+  std::cout << "-Sift::~Sift ()" << std::endl;
 }
 
 bool
@@ -71,14 +100,11 @@ Sift::process ()
   std::cout << "+Process" << std::endl;
   if (!O)
     return false;
-  int o, s;
-  double sa, sb;
 
   oCur_ = o_min;
   n_keys = 0;
-  oW_ = shift_left (src.width,  -oCur_);
-  oH_ = shift_left (src.height, -oCur_);
-  s = oW_ * oH_;
+  oW_ = shift_left (w, -oCur_);
+  oH_ = shift_left (h, -oCur_);
 
   double* octave = get_octave (s_min);
 
@@ -89,7 +115,7 @@ Sift::process ()
       copy_and_upsample_rows (octave, tmp_, h, 2 * w);
 
       /* double more */
-      for (o = -1; o > o_min; --o)
+      for (int o = -1; o > o_min; --o)
         {
           copy_and_upsample_rows (tmp_, octave,
                                     w << -o,      h << -o );
@@ -100,23 +126,27 @@ Sift::process ()
   else if (o_min > 0)
     copy_and_downsample (octave, im_, w, h, o_min);
   else
-    memcpy(octave, im_, s);
+    memcpy(octave, im_, w*h*sizeof (double));
 
   // adjust smoothing.
-  sa = sigma0_ * pow (sigmak_, s_min);
-  sb = sigman_ * pow (2.0, -o_min);
+  double sa = sigma0_ * pow (sigmak_, s_min);
+  double sb = sigman_ * pow (2.0, -o_min);
 
-  if (sa > sb) {
-    double sd = sqrt (sa*sa - sb*sb);
-    imsmooth (octave, tmp_, octave, oW_, oH_, sd);
-  }
+  if (sa > sb)
+    {
+      double sd = sqrt (sa*sa - sb*sb);
+      std::cout << "sa > sb => " << sd << std::endl;
+      imsmooth (octave, tmp_, octave, oW_, oH_, sd);
+    }
 
   // compute octave.
-  for(s = s_min + 1; s <= s_max; ++s) {
-    double sd = dsigma0_ * pow (sigmak_, s);
-    imsmooth (get_octave(s), tmp_,
-              get_octave(s - 1), w, h, sd);
-  }
+  for (int s = s_min + 1; s <= s_max; ++s)
+    {
+      std::cout << "compute octave " << s << std::endl;
+      double sd = dsigma0_ * pow (sigmak_, s);
+      imsmooth (get_octave(s), tmp_,
+                get_octave(s - 1), oW_, oH_, sd);
+    }
   std::cout << "-Process" << std::endl;
   return true;
 }
@@ -132,7 +162,7 @@ Sift::process_next ()
   double* pt = get_octave (s_best);
   double* octave = get_octave (s_min);
 
-  copy_and_downsample (octave, pt, w, h, 1);
+  copy_and_downsample (octave, pt, oW_, oH_, 1);
 
   oCur_ += 1, n_keys = 0;
   oW_ = shift_left (w,  - oCur_);
@@ -771,7 +801,7 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
 
 void
 Sift::copy_and_upsample_rows (double* dst,
-                             double const* src,
+                             const double* src,
                              int width, int height)
 {
   std::cout << "+copy_and_upsample_rows" << std::endl;
@@ -796,17 +826,16 @@ Sift::copy_and_upsample_rows (double* dst,
 }
 
 void
-Sift::copy_and_downsample (double* dst,  double const* src,
+Sift::copy_and_downsample (double* dst,  const double* src,
                            int width, int height, int d)
 {
   std::cout << "+copy_and_downsample" << std::endl;
-  int x, y;
 
   d = 1 << d; /* d = 2^d */
-  for (y = 0; y < height; y+=d)
+  for (int y = 0; y < height; y+=d)
     {
-      double const* srcrowp = src + y * width;
-      for(x = 0; x < width - (d-1); x+=d)
+      const double* srcrowp = src + y * width;
+      for (int x = 0; x < width - (d-1); x+=d)
         {
           *dst++ = *srcrowp;
           srcrowp += d;
@@ -817,51 +846,52 @@ Sift::copy_and_downsample (double* dst,  double const* src,
 
 void
 Sift::convtransp (double* dst,
-            double const* src,
-            double const* filt,
+            const double* src,
+            const double* filt,
             int width, int height, int filt_width)
 {
   std::cout << "+convtransp " << width << "/" << height << "/" << filt_width << std::endl;
-  int i, j;
 
-  for(j = 0; j < height; ++j) {
-    for(i = 0; i < width; ++i) {
-      double        acc   = 0.0;
-      double const *g     = filt;
-      double const *start = src + (i - filt_width);
-      double const *stop;
-      double        x;
+  for(int j = 0; j < height; ++j)
+    {
+      for(int i = 0; i < width; ++i)
+        {
+          double acc = 0.0;
+          double const *g = filt;
+          double const *start = src + (i - filt_width);
+          double const *stop;
+          double x;
 
-      /* beginning */
-      //std::cout << "+b" << std::endl;
-      stop = src + max (0, i - filt_width);
-      x    = *stop;
-      while (start <= stop) { acc += (*g++) * x; start++; }
-      //std::cout << "-b" << std::endl;
+          /* beginning */
+          //std::cout << "+b" << std::endl;
+          stop = src + max (0, i - filt_width);
+          x    = *stop;
+          while (start <= stop) { acc += (*g++) * x; start++; }
+          //std::cout << "-b" << std::endl;
 
-      /* middle */
-      //std::cout << "+m" << std::endl;
-      stop =  src + min (width - 1, i + filt_width);
-      while (start <  stop) acc += (*g++) * (*start++);
-      //std::cout << "-m" << std::endl;
+          /* middle */
+          //std::cout << "+m" << std::endl;
+          stop =  src + min (width - 1, i + filt_width);
+          while (start <  stop) acc += (*g++) * (*start++);
+          //std::cout << "-m" << std::endl;
 
-      /* end */
-      //std::cout << "+e" << std::endl;
-      x  = *start;
-      stop = src + (i + filt_width);
-      while (start <= stop) { acc += (*g++) * x; start++; }
-      //std::cout << "-e" << std::endl;
+          /* end */
+          //std::cout << "+e" << std::endl;
+          x  = *start;
+          stop = src + (i + filt_width);
+          while (start <= stop) { acc += (*g++) * x; start++; }
+          //std::cout << "-e" << std::endl;
 
-      /* save */
-      *dst = acc; //FIXME??
-      dst += height;
+          /* save */
+          *dst = acc;
+          dst += height;
 
-      assert (g - filt == 2 * filt_width +1);
+          assert (g - filt == 2 * filt_width +1);
+        }
+      /* next column */
+      src += width;
+      dst -= width*height - 1;
     }
-    /* next column */
-    src += width;
-    dst -= width*height - 1;
-  }
   std::cout << "-convtransp" << std::endl;
 }
 
@@ -872,13 +902,6 @@ Sift::imsmooth(double* dst,
          int width, int height, double sigma)
 {
   std::cout << "+imsmooth " << width << "/" << height << "/" << sigma << std::endl;
-  static double   *filt       = 0;
-  static int    filt_width = -1;
-  static double filt_static_sigma = -1.0;
-  enum          { filt_static_res = 1024 };
-  static double    filt_static [2 * filt_static_res + 1];
-
-  int j;
 
   if (sigma < (double)(1e-5))
     {
@@ -887,41 +910,42 @@ Sift::imsmooth(double* dst,
     }
 
   /* window width */
-  filt_width = (int) ceil (4.0 * sigma);
+  filt_width_ = (int) ceil (4.0 * sigma);
+  std::cout << filt_width_ << "/" << filt_res_ << std::endl;
 
   /* setup filter only if not available from previous iteration*/
-  if (filt_static_sigma != sigma)
+  if (filt_sigma_ != sigma)
     {
       double acc = 0.0;
 
-      if (filt_width <= filt_static_res)
+      if ((2 * filt_width_ + 1) > filt_res_)
         {
-          /* use static buffer */
-          filt = filt_static;
-          filt_static_sigma = sigma;
-        } else {
-        /* dynamically allocate a larger buffer */
-        filt = h_malloc<double>  (sizeof(double) * (2*filt_width+1));
-      }
+          std::cout << "alloc" << std::endl;
+          if (!!filt_)
+            free (filt_);
+          filt_ = h_malloc<double>  (sizeof(double) * (2*filt_width_+1));
+          filt_res_ = 2 * filt_width_ + 1;
+        }
+      filt_sigma_ = sigma;
 
-      for (j = 0; j < 2 * filt_width + 1; ++j) {
-        double  d = (double)(j - filt_width) / (double)(sigma);
-        filt [j] = exp (- 0.5 * d * d);
-        acc += filt [j];
-      }
+      for (int j = 0; j < 2 * filt_width_ + 1; ++j)
+        {
+          double  d = (double)(j - filt_width_) / (double)(sigma);
+          filt_ [j] = exp (- 0.5 * d * d);
+          acc += filt_ [j];
+        }
 
       /* normalize */
-      for (j = 0; j < 2 * filt_width + 1; ++j)
-        filt [j] /= acc;
+      for (int j = 0; j < 2 * filt_width_ + 1; ++j)
+        filt_ [j] /= acc;
     }
 
   /* convolve */
-  convtransp (temp, src, filt,
-              width, height, filt_width);
-  convtransp (dst, temp, filt,
-              height, width, filt_width);
-  /* free buffer? */
-  if (filt_static_sigma != sigma)
-    free (filt);
+  std::cout << "convtransp 1" << std::endl;
+  convtransp (temp, src, filt_,
+              width, height, filt_width_);
+  std::cout << "convtransp 2" << std::endl;
+  convtransp (dst, temp, filt_,
+              height, width, filt_width_);
   std::cout << "-imsmooth" << std::endl;
 }

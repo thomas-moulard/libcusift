@@ -14,7 +14,8 @@
 
 /// Safe host malloc.
 template <typename T>
-T* h_malloc (size_t s)
+inline T*
+h_malloc (size_t s)
 {
   return static_cast<T*> (malloc (s));
 }
@@ -38,19 +39,21 @@ shift_left(int x, int n)
 inline double
 mod_2pi (double x)
 {
-  while (x < 0.0      ) x += 2 * M_PI ;
-  while (x > 2 * M_PI) x -= 2 * M_PI ;
-  return x ;
+  while (x < 0.)
+    x += 2 * M_PI ;
+  while (x > 2 * M_PI)
+    x -= 2 * M_PI ;
+  return x;
 }
 
 static const int EXPN_SZ = 256;
 static const double EXPN_MAX = 25.0;
 extern double expn_tab [EXPN_SZ];
 
-void fast_expn_init ();
+void fast_expn_init (double expn_tab[EXPN_SZ]);
 
 inline double
-fast_expn (double x)
+fast_expn (double x, double expn_tab[EXPN_SZ])
 {
   double a,b,r;
   int i;

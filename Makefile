@@ -38,8 +38,8 @@ EXECUTABLE	:= cusift
 # CUDA source files (compiled with cudacc)
 CUFILES		:= sift.cu test.cu util.cu
 # CUDA dependency files
-#CU_DEPS		:= \
-#	template_kernel.cu \
+CU_DEPS		:= \
+	sift.hh util.hh
 
 # C/C++ source files (compiled with gcc / c++)
 #CCFILES		:= \

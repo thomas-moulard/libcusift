@@ -42,14 +42,21 @@ class Sift
 public:
   typedef std::list<SiftFeaturePoint> features_t;
 
+  Sift (const IplImage& src_, double pt, double te, double nt,
+        int O_, int S_, int o_min_);
+  ~Sift ();
+  features_t extract ();
+
+protected:
+  double fast_expn (double x)
+  {
+    return ::fast_expn (x, expn_tab_);
+  }
+
   int compute_o_min (int o_min, int w, int h)
   {
     return max ((int) (floor (log2 (min (w, h))) - o_min - 3), 1);
   }
-
-  Sift (const IplImage& src_, double pt, double te, double nt,
-        int O_, int S_, int o_min_);
-  ~Sift ();
 
   bool process ();
   bool process_next ();
@@ -57,12 +64,10 @@ public:
   double normalize_histogram (double *begin, double *end);
   void compute_keypoint_descriptor(double descr[128], int ind, double angle);
 
-  features_t extract ();
-
   double*
   get_octave (int s)
   {
-    return octave_ + oW_ * oH_ * (s - s_min);
+    return octave_ + (oW_ * oH_ * (s - s_min));
   }
 
   void compute_dog ();
@@ -79,14 +84,14 @@ public:
   }
 
   void copy_and_upsample_rows (double* dst,
-                               double const* src,
+                               const double* src,
                                int width, int height);
 
-  void copy_and_downsample (double* dst,  double const* src,
+  void copy_and_downsample (double* dst,  const double* src,
                             int width, int height, int d);
   void convtransp (double* dst,
-                   double const* src,
-                   double const* filt,
+                   const double* src,
+                   const double* filt,
                    int width, int height, int filt_width);
   void imsmooth(double* dst,
                 double* temp,
@@ -135,6 +140,13 @@ private:
   double* gradient_;
   double* tmp_;
   double* im_;
+
+  int filt_width_;
+  double filt_sigma_;
+  int filt_res_;
+  double* filt_;
+
+  double expn_tab_[EXPN_SZ];
 };
 
 #endif //! SIFT_HH_

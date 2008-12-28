@@ -24,9 +24,6 @@ Sift::Sift (const IplImage& src_, double pt, double te, double nt,
     w (src.width),
     h (src.height),
     s (shift_left (w, -o_min) * shift_left (h, -o_min) * sizeof (double)),
-    xo (1),
-    yo (w),
-    so (w * h),
     sigmak_ (pow(2.0, 1.0 / S_)), // 2^(1/S)
     sigman_ (0.5),
     sigma0_ (1.6 * sigmak_),
@@ -73,7 +70,7 @@ Sift::~Sift ()
   std::cout << "+Sift::~Sift ()" << std::endl;
 
   std::cout << "Free keys" << std::endl;
-  if (keys && n_keys)
+  if (keys)
     free (keys);
 
   std::cout << "Free image (double)" << std::endl;
@@ -205,11 +202,11 @@ Sift::compute_keypoint_descriptor(double descr[128], int ind, double angle)
   const int    NBO         = 8;
   const int    NBP         = 4;
   double       xper        = pow (2.0, oCur_);
-  const int    xo          = 2;         /* x-stride */
-  const int    yo          = 2 * w;     /* y-stride */
-  const int    so          = 2 * w * h; /* s-stride */
-  double       x           = k->x     / xper;
-  double       y           = k->y     / xper;
+  const int    xo          = 2;             /* x-stride */
+  const int    yo          = 2 * oW_;       /* y-stride */
+  const int    so          = 2 * oW_ * oH_; /* s-stride */
+  double       x           = k->x / xper;
+  double       y           = k->y / xper;
   double       sigma       = k->sigma / xper;
 
   int          xi          = (int) (x + 0.5);
@@ -227,8 +224,8 @@ Sift::compute_keypoint_descriptor(double descr[128], int ind, double angle)
   const int binxo = NBO;        /* bin x-stride */
 
   /* check bounds */
-  if(k->o  != oCur_ || xi <  0 || xi >= w || yi <  0 ||
-     yi >= h - 1 || si < s_min + 1 || si > s_max - 2)
+  if(k->o  != oCur_ || xi <  0 || xi >= oW_ || yi <  0 ||
+     yi >= oH_ - 1 || si < s_min + 1 || si > s_max - 2)
     return;
 
   /* synchronize gradient buffer */
@@ -247,12 +244,12 @@ Sift::compute_keypoint_descriptor(double descr[128], int ind, double angle)
    * Process pixels in the intersection of the image rectangle
    * (1,1)-(M-1,N-1) and the keypoint bounding box.
    */
-  for(int dyi =  max (- W, 1 - yi); dyi <= min (+ W, h - yi - 2); ++dyi)
-    for(int dxi =  max (- W, 1 - xi); dxi <= min (+ W, w - xi - 2); ++ dxi)
+  for(int dyi =  max (-W, 1 - yi); dyi <= min (W, oH_ - yi - 2); ++dyi)
+    for(int dxi =  max (-W, 1 - xi); dxi <= min (W, oW_ - xi - 2); ++ dxi)
       {
         /* retrieve */
-        double mod   = *( pt + dxi*xo + dyi*yo + 0 );
-        double angle_ = *( pt + dxi*xo + dyi*yo + 1 );
+        double mod   = * (pt + dxi*xo + dyi*yo + 0);
+        double angle_ = * (pt + dxi*xo + dyi*yo + 1);
         double theta = mod_2pi (angle_ - angle);
 
         /* fractional displacement */
@@ -261,7 +258,7 @@ Sift::compute_keypoint_descriptor(double descr[128], int ind, double angle)
 
         /* get the displacement normalized w.r.t. the keypoint
            orientation and extension */
-        double nx = ( ct0 * dx + st0 * dy) / SBP;
+        double nx = (ct0 * dx + st0 * dy) / SBP;
         double ny = (-st0 * dx + ct0 * dy) / SBP;
         double nt = NBO * theta / (2 * M_PI);
 
@@ -334,6 +331,7 @@ Sift::extract ()
       for (int i=0; i<n_keys; ++i)
         {
           double angles[4];
+          memset (angles, 0, sizeof(double) * 4);
           int n_angles = compute_keypoint_orientation (i, angles);
 
           for (int q=0; q < n_angles; ++q)
@@ -410,13 +408,16 @@ void
 Sift::detect_maxima ()
 {
   std::cout << "+Detect maxima" << std::endl;
+  const int xo = 1;         /* x-stride */
+  const int yo = oW_;       /* y-stride */
+  const int so = oW_ * oH_; /* s-stride */
   double* pt  = dog_ + xo + yo + so;
 
   for (int s = s_min + 1; s <= s_max - 2; ++s)
     {
-      for(int y = 1; y < h - 1; ++y)
+      for(int y = 1; y < oH_ - 1; ++y)
         {
-          for(int x = 1; x < w - 1; ++x)
+          for(int x = 1; x < oW_ - 1; ++x)
             {
               double v = *pt;
               if (CHECK_NEIGHBORS(>,+) ||
@@ -454,7 +455,6 @@ Sift::refine_maxima ()
 {
   std::cout << "+Refine maxima" << std::endl;
   SiftKeypoint* k = keys;
-  int i = 0, j = 0, jj = 0, ii = 0;
 
   double maxa = 0;
   double maxabsa = 0;
@@ -463,7 +463,11 @@ Sift::refine_maxima ()
   double* pt = 0;
   double xper  = pow (2.0, oCur_);
 
-  for (i = 0; i < n_keys; ++i)
+  const int xo = 1;         /* x-stride */
+  const int yo = oW_;       /* y-stride */
+  const int so = oW_ * oH_; /* s-stride */
+
+  for (int i = 0; i < n_keys; ++i)
     {
       int x =  keys[i].ix;
       int y =  keys[i].iy;
@@ -501,7 +505,7 @@ Sift::refine_maxima ()
           b[0] = - Dx, b[1] = - Dy, b[2] = - Ds;
 
           /* Gauss elimination */
-          for(j = 0; j < 3; ++j)
+          for(int j = 0; j < 3; ++j)
             {
               /* look for the maximally stable pivot */
               for (int i = j; i < 3; ++i)
@@ -510,38 +514,40 @@ Sift::refine_maxima ()
                   if (absa > maxabsa)
                     maxa = a, maxabsa = absa, maxi = i;
                 }
-            }
 
-          /* if singular give up */
-          if (maxabsa < 1e-10f)
-            {
-              b[0] = 0, b[1] = 0, b[2] = 0;
-              break;
-            }
+              /* if singular give up */
+              if (maxabsa < 1e-10f)
+                {
+                  b[0] = 0, b[1] = 0, b[2] = 0;
+                  break;
+                }
 
-          i = maxi;
+              /* swap j-th row with i-th row and normalize j-th row */
+              for(int jj = j; jj < 3; ++jj)
+                {
+                  tmp = Aat(maxi,jj);
+                  Aat(maxi,jj) = Aat(j,jj);
+                  Aat(j,jj) = tmp;
+                  Aat(j,jj) /= maxa;
+                }
+              tmp = b[j]; b[j] = b[maxi]; b[maxi] = tmp;
+              b[j] /= maxa;
 
-          /* swap j-th row with i-th row and normalize j-th row */
-          for(jj = j; jj < 3; ++jj)
-            tmp = Aat(i,jj); Aat(i,jj) = Aat(j,jj); Aat(j,jj) = tmp,
-                                                      Aat(j,jj) /= maxa;
-          tmp = b[j]; b[j] = b[i]; b[i] = tmp;
-          b[j] /= maxa;
-
-          /* elimination */
-          for (ii = j+1; ii < 3; ++ii)
-            {
-              double x = Aat(ii,j);
-              for (jj = j; jj < 3; ++jj)
-                Aat(ii,jj) -= x * Aat(j,jj);
-              b[ii] -= x * b[j];
+              /* elimination */
+              for (int ii = j+1; ii < 3; ++ii)
+                {
+                  double x = Aat(ii,j);
+                  for (int jj = j; jj < 3; ++jj)
+                    Aat(ii,jj) -= x * Aat(j,jj);
+                  b[ii] -= x * b[j];
+                }
             }
 
           /* backward substitution */
-          for (i = 2; i > 0; --i)
+          for (int i = 2; i > 0; --i)
             {
               double x = b[i];
-              for (ii = i-1; ii >= 0; --ii)
+              for (int ii = i-1; ii >= 0; --ii)
                 b[ii] -= x * Aat(ii,i);
             }
 
@@ -550,13 +556,14 @@ Sift::refine_maxima ()
            * and re-iterate the computation. Otherwise we are all set.
            */
 
-          dx= ((b[0] >  0.6 && x < w - 2) ?  1 : 0)
-            + ((b[0] < -0.6 && x > 1    ) ? -1 : 0);
+          dx= ((b[0] >  0.6 && x < oW_ - 2) ?  1 : 0)
+            + ((b[0] < -0.6 && x > 1)       ? -1 : 0);
 
-          dy= ((b[1] >  0.6 && y < h - 2) ?  1 : 0)
-            + ((b[1] < -0.6 && y > 1    ) ? -1 : 0);
+          dy= ((b[1] >  0.6 && y < oH_ - 2) ?  1 : 0)
+            + ((b[1] < -0.6 && y > 1)       ? -1 : 0);
 
-          if (dx == 0 && dy == 0) break;
+          if (dx == 0 && dy == 0)
+            break;
         }
 
       /* check threshold and other conditions */
@@ -569,35 +576,36 @@ Sift::refine_maxima ()
         double sn = s + b[2];
 
         bool good =
-          abs (val)  > peak_threshold           &&
-          score           < (edge_threshold+1)*(edge_threshold+1)
-          /edge_threshold    &&
+          abs (val) > peak_threshold            &&
+          score < (edge_threshold+1)*(edge_threshold+1)
+          /edge_threshold                       &&
           score           >= 0                  &&
           abs (b[0]) <  1.5                     &&
           abs (b[1]) <  1.5                     &&
           abs (b[2]) <  1.5                     &&
           xn              >= 0                  &&
-          xn              <= w - 1              &&
+          xn              <= oW_ - 1            &&
           yn              >= 0                  &&
-          yn              <= h - 1              &&
+          yn              <= oH_ - 1            &&
           sn              >= s_min              &&
           sn              <= s_max;
 
-        if (good) {
-          k->o = oCur_;
-          k->ix = x, k->iy = y, k->is = s;
-          k->s = sn;
-          k->x = xn * xper, k->y = yn * xper;
-          k->sigma = sigma0_ * pow (2.0, sn/S) * xper;
-          ++k;
-        }
-
+        if (good)
+          {
+            k->o = oCur_;
+            k->ix = x, k->iy = y, k->is = s;
+            k->s = sn;
+            k->x = xn * xper, k->y = yn * xper;
+            k->sigma = sigma0_ * pow (2.0, sn/S) * xper;
+            ++k;
+          }
       } /* done checking */
     } /* next keypoint to refine */
 
   /* update keypoint count */
+  assert (k >= keys);
   n_keys = k - keys;
-  std::cout << "-Refine maxima" << std::endl;
+  std::cout << "-Refine maxima (" << n_keys << ")" << std::endl;
 }
 #undef at
 
@@ -610,6 +618,10 @@ Sift::refine_maxima ()
 void
 Sift::update_gradient ()
 {
+  const int xo = 1;         /* x-stride */
+  const int yo = oW_;       /* y-stride */
+  const int so = oW_ * oH_; /* s-stride */
+
   if (oGrad_ == oCur_)
     return;
 
@@ -695,9 +707,9 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
   const double winf = 1.5;
   double xper = pow (2.0, oCur_);
 
-  const int xo = 2;         /* x-stride */
-  const int yo = 2 * w;     /* y-stride */
-  const int so = 2 * w * h; /* s-stride */
+  const int xo = 2;             /* x-stride */
+  const int yo = 2 * oW_;       /* y-stride */
+  const int so = 2 * oW_ * oH_; /* s-stride */
   double x = k->x/xper, y = k->y/xper;
   double sigma = k->sigma/xper;
 
@@ -707,8 +719,7 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
   const double sigmaw = winf * sigma;
   int W = (int)max (floor (3.0 * sigmaw), 1.);
   int nangles = 0;
-  enum { nbins = 36 };
-
+  const int nbins = 36;
   double hist [nbins], maxh;
 
   /* skip if the keypoint octave is not current */
@@ -716,7 +727,7 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
     return 0;
 
   /* skip the keypoint if it is out of bounds */
-  if(xi < 0 || xi > w - 1 || yi < 0 || yi > h - 1 ||
+  if(xi < 0 || xi > oW_ - 1 || yi < 0 || yi > oH_ - 1 ||
      si < s_min + 1 || si > s_max - 2 )
     return 0;
 
@@ -729,10 +740,10 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
   /* compute orientation histogram */
   double* pt =  gradient_ + xo*xi + yo*yi + so*(si - s_min - 1);
 
-  for (int ys  =  max (- W, - yi);
-       ys <=  min (+ W, h - 1 - yi); ++ys)
-    for (int xs  = max (- W,       - xi);
-         xs <= min (+ W, w - 1 - xi); ++xs)
+  for (int ys  =  max (-W, -yi);
+       ys <=  min (W, oH_ - 1 - yi); ++ys)
+    for (int xs  = max (-W, -xi);
+         xs <= min (W, oW_ - 1 - xi); ++xs)
       {
         double dx = (double)(xi + xs) - x;
         double dy = (double)(yi + ys) - y;
@@ -759,8 +770,8 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
     {
       double prev  = hist [nbins - 1];
       double first = hist [0];
-      int i;
-      for (i = 0; i < nbins - 1; i++)
+      int i = 0;
+      for (; i < nbins - 1; i++)
         {
           double newh = (prev + hist[i] + hist[(i+1) % nbins]) / 3.0;
           prev = hist[i];
@@ -783,13 +794,13 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
       double hp = hist [(i + 1 + nbins) % nbins];
 
       /* is this a peak? */
-      if (h0 > 0.8*maxh && h0 > hm && h0 > hp)
+      if (h0 > .8 * maxh && h0 > hm && h0 > hp)
         {
           /* quadratic interpolation */
           double di = - 0.5 * (hp - hm) / (hp + hm - 2 * h0);
           double th = 2 * M_PI * (i + di + 0.5) / nbins;
           angles [ nangles++ ] = th;
-          if( nangles == 4 )
+          if (nangles == 4)
             return n_angles;
         }
     }

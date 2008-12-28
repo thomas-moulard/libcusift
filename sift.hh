@@ -122,9 +122,6 @@ public:
   const int h;
   const int s;
 
-  const int xo;
-  const int yo;
-  const int so;
 private:
   double sigmak_;
   double sigman_;

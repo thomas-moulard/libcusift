@@ -450,6 +450,8 @@ Sift::detect_maxima ()
               if (CHECK_NEIGHBORS(>,+) ||
                   CHECK_NEIGHBORS(<,-) )
                 {
+                  printf("%f ! %f ! %f\n", v, .8*peak_threshold, *(pt + xo));
+
                   /* make room for more keypoints */
                   if (n_keys >= n_keys_res)
                     {
@@ -465,6 +467,7 @@ Sift::detect_maxima ()
 
                   SiftKeypoint* k = keys + (n_keys ++);
                   k->ix = x, k->iy = y, k->is = s;
+                  //std::cout << "#" << x << "#" << y << "#" << s << std::endl;
                 }
               pt += 1;
             }
@@ -472,6 +475,8 @@ Sift::detect_maxima ()
         }
       pt += 2 * yo;
     }
+  DEBUG() << peak_threshold << std::endl;
+  DEBUG() << "(" << n_keys_res << " reserved keys)." << std::endl;
   DEBUG() << "-Detect maxima (" << n_keys << " points detected)." << std::endl;
 }
 

@@ -19,12 +19,17 @@ dumpDoubleImage(double* src,
                                  IPL_DEPTH_8U, 1);
   uchar* data    = (uchar *) img->imageData;
 
-  double norm = 0.;
+  double maximum = 0.;
+  double minimum = 0.;
   for (int i = 0; i < size; ++i)
-    norm = max (src[i], norm);
+    {
+      maximum = max (src[i], maximum);
+      minimum = min (src[i], minimum);
+    }
+  double norm = maximum-minimum+1;
 
   for (int i = 0; i < size; ++i)
-    data[i] = (uchar) ((src[i]/norm)*255);
+    data[i] = (uchar) (((src[i]-minimum)/norm)*255);
 
   if(!cvSaveImage(filename.c_str(), img))
     std::cout << "Could not save: " << filename << std::endl;

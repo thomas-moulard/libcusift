@@ -8,14 +8,18 @@
 
 # include <cstdlib>
 
+# include <string>
+
 /******************************************
- * Log                                    *
+ * Log / Debug                            *
  ******************************************/
 # ifdef _DEBUG
 #  define DEBUG() std::cout
 # else
 #  define DEBUG() if (0) std::cout
 # endif //! _DEBUG
+
+void dumpDoubleImage(double*, int, int, std::string);
 
 /******************************************
  * System                                 *

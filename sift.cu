@@ -4,6 +4,7 @@
 
 //FIXME: add cuda, write report, test.
 
+#include <sstream>
 #include "sift.hh"
 
 Sift::Sift (const IplImage& src_, double pt, double et, double nt,
@@ -142,6 +143,9 @@ Sift::process ()
       double sd = dsigma0_ * pow (sigmak_, s);
       imsmooth (get_octave(s), tmp_,
                 get_octave(s - 1), oW_, oH_, sd);
+
+      std::ostringstream ss; ss << "octave-" << oCur_ << "-" << s << ".bmp";
+      dumpDoubleImage (octave+s, oW_, oH_, ss.str());
     }
   DEBUG() << "-Process" << std::endl;
   return true;
@@ -172,6 +176,17 @@ Sift::process_next ()
       double sd = sqrt (sa*sa - sb*sb);
       imsmooth (octave, tmp_, octave, oW_, oH_, sd);
     }
+
+  for(int s = s_min + 1 ; s <= s_max ; ++s)
+    {
+      double sd = dsigma0_ * pow (sigmak_, s);
+      imsmooth (get_octave (s), tmp_,
+                get_octave (s - 1), oW_, oH_, sd);
+
+      std::ostringstream ss; ss << "octave-" << oCur_ << "-" << s << ".bmp";
+      dumpDoubleImage (octave+s, oW_, oH_, ss.str());
+    }
+
   DEBUG() << "-Process next" << std::endl;
   return true;
 }
@@ -361,11 +376,16 @@ Sift::compute_dog ()
   double* pt = dog_;
   for (int s = s_min; s <= s_max - 1; ++s)
     {
+      double* src_dog = pt;
+
       double* src_a = get_octave (s);
       double* src_b = get_octave (s + 1);
       double* end_a = src_a + oW_ * oH_;
       while (src_a != end_a)
         *pt++ = *src_b++ - *src_a++;
+
+      std::ostringstream ss; ss << "dog-" << oCur_ << "-" << s << ".bmp";
+      dumpDoubleImage (src_dog, oW_, oH_, ss.str());
     }
 }
 

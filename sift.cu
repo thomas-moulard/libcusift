@@ -2,8 +2,7 @@
  * SIFT implementation.
  */
 
-//FIXME: in extract, return sift points.
-//       add cuda, write report, test.
+//FIXME: add cuda, write report, test.
 
 #include "sift.hh"
 
@@ -328,12 +327,13 @@ Sift::extract ()
     {
       detect ();
 
+      std::cout << n_keys << " generated keys." << std::endl;
       for (int i=0; i<n_keys; ++i)
         {
           double angles[4];
           memset (angles, 0, sizeof(double) * 4);
           int n_angles = compute_keypoint_orientation (i, angles);
-
+          std::cout << "n_angles: " << n_angles << std::endl;
           for (int q=0; q < n_angles; ++q)
             {
               double descr[128];
@@ -610,8 +610,8 @@ Sift::refine_maxima ()
 #undef at
 
 #define SAVE_BACK                                       \
-  *gradient_++ = sqrt (gx*gx + gy*gy);                  \
-  *gradient_++ = mod_2pi(atan2 (gy, gx) + 2*M_PI);      \
+  *grad++ = sqrt (gx*gx + gy*gy);                  \
+  *grad++ = mod_2pi(atan2 (gy, gx) + 2*M_PI);      \
   ++src
 
 
@@ -631,7 +631,7 @@ Sift::update_gradient ()
       double* src;
       double* end;
       double gx, gy;
-      gradient_ = gradient_ + 2 * so * (s - s_min -1);
+      double* grad = gradient_ + 2 * so * (s - s_min -1);
       src  = get_octave (s);
 
       /* first first row */
@@ -640,7 +640,7 @@ Sift::update_gradient ()
       SAVE_BACK;
 
       /* middle first row */
-      end = (src - 1) + w - 1;
+      end = (src - 1) + oW_ - 1;
       while (src < end)
         {
           gx = 0.5 * (src[+xo] - src[-xo]);
@@ -653,7 +653,7 @@ Sift::update_gradient ()
       gy = src[+yo] - src[0];
       SAVE_BACK;
 
-      for (int y = 1; y < h -1; ++y)
+      for (int y = 1; y < oH_ -1; ++y)
         {
           /* first middle row */
           gx =        src[+xo] - src[0];
@@ -661,7 +661,7 @@ Sift::update_gradient ()
           SAVE_BACK;
 
           /* middle middle row */
-          end = (src - 1) + w - 1;
+          end = (src - 1) + oW_ - 1;
           while (src < end)
             {
               gx = 0.5 * (src[+xo] - src[-xo]);
@@ -681,7 +681,7 @@ Sift::update_gradient ()
       SAVE_BACK;
 
       /* middle last row */
-      end = (src - 1) + w - 1;
+      end = (src - 1) + oW_ - 1;
       while (src < end)
         {
           gx = 0.5 * (src[+xo] - src[-xo]);

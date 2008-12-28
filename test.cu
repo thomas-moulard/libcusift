@@ -4,8 +4,7 @@
 #include "sift.hh"
 #include "util.hh"
 
-//char* inFilename = "data/left2.pgm";
-char* inFilename = "IMG_1011.jpg";
+char* inFilename = "data/IMG_1011.jpg";
 char* outFilename = "res.bmp";
 
 
@@ -13,7 +12,7 @@ void
 computeResultImage (const std::list<SiftFeaturePoint>& sift, IplImage& img,
                     double z=1., double xOff=0., double yOff=0.)
 {
-  std::cout << "+computeResultImage" << std::endl;
+  DEBUG() << "+computeResultImage" << std::endl;
   typedef std::list<SiftFeaturePoint>::const_iterator citer_t;
 
   for (citer_t it = sift.begin ();
@@ -21,12 +20,12 @@ computeResultImage (const std::list<SiftFeaturePoint>& sift, IplImage& img,
     {
       int r = (int)((it->scale+1)*z);
       CvPoint o = cvPoint ((int)((it->x+xOff)*z), (int)((it->y+yOff)*z));
-      CvPoint o2 = cvPoint ((int)((it->x+xOff)+(r*z*cos(it->angle))),
-                            (int)((it->y+yOff)+(r*z*sin(it->angle))));
+      CvPoint o2 = cvPoint ((int)((it->x+xOff)+(r*cos(it->angle))),
+                            (int)((it->y+yOff)+(r*sin(it->angle))));
       cvCircle(&img, o, r, cvScalar(0, 0, 255), 1);
       cvLine(&img, o, o2, cvScalar(0, 0, 255), 1);
     }
-  std::cout << "-computeResultImage" << std::endl;
+  DEBUG() << "-computeResultImage" << std::endl;
 }
 
 
@@ -57,7 +56,8 @@ testSift (int argc, char** argv)
 
   // Run sift and store image result.
   {
-    Sift sift (*greyimg, 1., 10., 1., 4, 3, 1);
+    // img, peak th, edge th, norm th, O, S, s_min
+    Sift sift (*greyimg, 0., 2., 0., 4, 3, 1);
     std::cout << "Begin SIFT extraction." << std::endl;
 
     CUT_SAFE_CALL(cutStartTimer (timer));

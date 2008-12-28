@@ -2,8 +2,6 @@
  * SIFT implementation.
  */
 
-//FIXME: add cuda, write report, test.
-
 #include <sstream>
 #include "sift.hh"
 
@@ -467,7 +465,6 @@ Sift::detect_maxima ()
 
                   SiftKeypoint* k = keys + (n_keys ++);
                   k->ix = x, k->iy = y, k->is = s;
-                  //std::cout << "#" << x << "#" << y << "#" << s << std::endl;
                 }
               pt += 1;
             }

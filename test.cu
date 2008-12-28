@@ -4,7 +4,8 @@
 #include "sift.hh"
 #include "util.hh"
 
-char* inFilename = "data/left2.pgm";
+//char* inFilename = "data/left2.pgm";
+char* inFilename = "IMG_1011.jpg";
 char* outFilename = "res.bmp";
 
 

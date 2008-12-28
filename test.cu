@@ -18,12 +18,12 @@ computeResultImage (const std::list<SiftFeaturePoint>& sift, IplImage& img,
   for (citer_t it = sift.begin ();
        it != sift.end(); ++it)
     {
+      int r = (int)((it->scale+1)*z);
       CvPoint o = cvPoint ((int)((it->x+xOff)*z), (int)((it->y+yOff)*z));
-      CvPoint o2 = cvPoint ((int)((it->x+xOff)*z*cos(it->angle)),
-                            (int)((it->y+yOff)*z*sin(it->angle)));
-      cvCircle(&img, o,
-               (int)((it->scale+1)*z), cvScalar(255,0,0), 1);
-      cvLine(&img, o, o2, cvScalar(255,0,0), 1);
+      CvPoint o2 = cvPoint ((int)((it->x+xOff)+(r*z*cos(it->angle))),
+                            (int)((it->y+yOff)+(r*z*sin(it->angle))));
+      cvCircle(&img, o, r, cvScalar(0, 0, 255), 1);
+      cvLine(&img, o, o2, cvScalar(0, 0, 255), 1);
     }
   std::cout << "-computeResultImage" << std::endl;
 }
@@ -56,7 +56,7 @@ testSift (int argc, char** argv)
 
   // Run sift and store image result.
   {
-    Sift sift (*greyimg, 1., 1., 1., 4, 3, 1);
+    Sift sift (*greyimg, 1., 10., 1., 4, 3, 1);
     std::cout << "Begin SIFT extraction." << std::endl;
 
     CUT_SAFE_CALL(cutStartTimer (timer));
@@ -65,11 +65,11 @@ testSift (int argc, char** argv)
 
     std::cout << "SIFT extraction done." << std::endl;
     std::cout << fps.size() << " extracted feature(s)." << std::endl;
-    computeResultImage (fps, *greyimg);
+    computeResultImage (fps, *img);
   }
 
   // Write result image.
-  if(!cvSaveImage(outFilename, greyimg))
+  if(!cvSaveImage(outFilename, img))
     std::cout << "Could not save: " << outFilename << std::endl;
   else
     std::cout << outFilename << " succesfully written." << std::endl;

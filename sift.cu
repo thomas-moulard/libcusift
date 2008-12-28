@@ -6,14 +6,14 @@
 
 #include "sift.hh"
 
-Sift::Sift (const IplImage& src_, double pt, double te, double nt,
+Sift::Sift (const IplImage& src_, double pt, double et, double nt,
             int O_, int S_, int o_min_)
   : n_keys (0),
     n_keys_res (0),
     keys (0),
     src (src_),
     peak_threshold (pt),
-    edge_threshold (te),
+    edge_threshold (et),
     norm_threshold (nt),
     O ((O < 0) ? compute_o_min (o_min_, src_.width, src_.height) : O_),
     S (S_),
@@ -46,7 +46,7 @@ Sift::Sift (const IplImage& src_, double pt, double te, double nt,
             << "* Number of octaves: " << O << std::endl
             << "* Min octave: " << o_min << std::endl
             << "* S: " << S << std::endl
-            << "* Peak/Edge/Norm thresholds: " << pt << "/" << te << "/" << nt
+            << "* Peak/Edge/Norm thresholds: " << pt << "/" << et << "/" << nt
             << std::endl;
   std::cout << (s/sizeof (double))
             << " / "
@@ -333,7 +333,7 @@ Sift::extract ()
           double angles[4];
           memset (angles, 0, sizeof(double) * 4);
           int n_angles = compute_keypoint_orientation (i, angles);
-          std::cout << "n_angles: " << n_angles << std::endl;
+          //std::cout << "n_angles: " << n_angles << std::endl;
           for (int q=0; q < n_angles; ++q)
             {
               double descr[128];
@@ -577,8 +577,7 @@ Sift::refine_maxima ()
 
         bool good =
           abs (val) > peak_threshold            &&
-          score < (edge_threshold+1)*(edge_threshold+1)
-          /edge_threshold                       &&
+          score < (edge_threshold+1)*(edge_threshold+1)/edge_threshold &&
           score           >= 0                  &&
           abs (b[0]) <  1.5                     &&
           abs (b[1]) <  1.5                     &&
@@ -589,6 +588,22 @@ Sift::refine_maxima ()
           yn              <= oH_ - 1            &&
           sn              >= s_min              &&
           sn              <= s_max;
+
+//         std::cout << "+++" << std::endl
+//                   << abs(val) << ">" << peak_threshold << std::endl
+//                   << score << "<"
+//                   << (edge_threshold+1)*(edge_threshold+1)/edge_threshold << std::endl
+//                   << score << ">=" << 0 << std::endl
+//                   << abs (b[0]) << "<" << 1.5 << std::endl
+//                   << abs (b[1]) << "<" << 1.5 << std::endl
+//                   << abs (b[2]) << "<" << 1.5 << std::endl
+//                   << xn << ">=" << 0 << std::endl
+//                   << xn << "<=" << oW_ - 1 << std::endl
+//                   << yn << ">=" << 0 << std::endl
+//                   << yn << "<=" << oH_ - 1 << std::endl
+//                   << sn << ">=" << s_min << std::endl
+//                   << sn << "<=" << s_max << std::endl
+//                   << "---" << std::endl;
 
         if (good)
           {
@@ -718,7 +733,6 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
 
   const double sigmaw = winf * sigma;
   int W = (int)max (floor (3.0 * sigmaw), 1.);
-  int nangles = 0;
   const int nbins = 36;
   double hist [nbins], maxh;
 
@@ -793,14 +807,20 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
       double hm = hist [(i - 1 + nbins) % nbins];
       double hp = hist [(i + 1 + nbins) % nbins];
 
+//       std::cout << "+++" << std::endl
+//                 << h0 << ">" << .8 * maxh << std::endl
+//                 << h0 << ">" << hm << std::endl
+//                 << h0 << ">" << hp << std::endl
+//                 << "---" << std::endl;
+
       /* is this a peak? */
       if (h0 > .8 * maxh && h0 > hm && h0 > hp)
         {
           /* quadratic interpolation */
           double di = - 0.5 * (hp - hm) / (hp + hm - 2 * h0);
           double th = 2 * M_PI * (i + di + 0.5) / nbins;
-          angles [ nangles++ ] = th;
-          if (nangles == 4)
+          angles [n_angles++] = th;
+          if (n_angles == 4)
             return n_angles;
         }
     }

@@ -57,7 +57,7 @@ testSift (int argc, char** argv)
   // Run sift and store image result.
   {
     // img, peak th, edge th, norm th, O, S, s_min
-    Sift sift (*greyimg, 0., 2., 0., 4, 3, 1);
+    Sift sift (*greyimg, 0., 10., 0., 4, 3, 1);
     std::cout << "Begin SIFT extraction." << std::endl;
 
     CUT_SAFE_CALL(cutStartTimer (timer));

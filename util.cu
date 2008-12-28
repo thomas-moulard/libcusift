@@ -26,9 +26,10 @@ dumpDoubleImage(double* src,
   for (int i = 0; i < size; ++i)
     data[i] = (uchar) ((src[i]/norm)*255);
 
-  std::cout << filename.c_str() << std::endl;
   if(!cvSaveImage(filename.c_str(), img))
     std::cout << "Could not save: " << filename << std::endl;
+  else
+    DEBUG() << filename.c_str() << " successfully written." << std::endl;
   cvReleaseImage (&img);
 }
 

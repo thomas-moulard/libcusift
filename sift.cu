@@ -103,6 +103,9 @@ Sift::process ()
   oW_ = shift_left (w, -oCur_);
   oH_ = shift_left (h, -oCur_);
 
+  if (this->O == 0)
+    return false;
+
   double* octave = get_octave (s_min);
 
   if (o_min < 0)
@@ -135,6 +138,8 @@ Sift::process ()
       DEBUG() << "sa > sb => " << sd << std::endl;
       imsmooth (octave, tmp_, octave, oW_, oH_, sd);
     }
+  std::ostringstream ss; ss << "octave-" << oCur_ << "-" << s_min << ".bmp";
+  dumpDoubleImage (get_octave(s_min), oW_, oH_, ss.str());
 
   // compute octave.
   for (int s = s_min + 1; s <= s_max; ++s)
@@ -145,7 +150,7 @@ Sift::process ()
                 get_octave(s - 1), oW_, oH_, sd);
 
       std::ostringstream ss; ss << "octave-" << oCur_ << "-" << s << ".bmp";
-      dumpDoubleImage (octave+s, oW_, oH_, ss.str());
+      dumpDoubleImage (get_octave(s), oW_, oH_, ss.str());
     }
   DEBUG() << "-Process" << std::endl;
   return true;
@@ -165,8 +170,8 @@ Sift::process_next ()
   copy_and_downsample (octave, pt, oW_, oH_, 1);
 
   oCur_ += 1, n_keys = 0;
-  oW_ = shift_left (w,  - oCur_);
-  oH_ = shift_left (h, - oCur_);
+  oW_ = shift_left (w, -oCur_);
+  oH_ = shift_left (h, -oCur_);
 
   double sa = sigma0_ * powf (sigmak_, s_min);
   double sb = sigma0_ * powf (sigmak_, s_best - S);
@@ -176,6 +181,8 @@ Sift::process_next ()
       double sd = sqrt (sa*sa - sb*sb);
       imsmooth (octave, tmp_, octave, oW_, oH_, sd);
     }
+  std::ostringstream ss; ss << "octave-" << oCur_ << "-" << s_min << ".bmp";
+  dumpDoubleImage (get_octave(s_min), oW_, oH_, ss.str());
 
   for(int s = s_min + 1 ; s <= s_max ; ++s)
     {
@@ -184,7 +191,7 @@ Sift::process_next ()
                 get_octave (s - 1), oW_, oH_, sd);
 
       std::ostringstream ss; ss << "octave-" << oCur_ << "-" << s << ".bmp";
-      dumpDoubleImage (octave+s, oW_, oH_, ss.str());
+      dumpDoubleImage (get_octave (s), oW_, oH_, ss.str());
     }
 
   DEBUG() << "-Process next" << std::endl;
@@ -212,20 +219,20 @@ Sift::compute_keypoint_descriptor(double descr[128], int ind, double angle)
   assert (ind < n_keys);
   SiftKeypoint* k = keys + ind;
 
-  const double magnif      = 3.0;
-  const int    NBO         = 8;
-  const int    NBP         = 4;
-  double       xper        = pow (2.0, oCur_);
-  const int    xo          = 2;             /* x-stride */
-  const int    yo          = 2 * oW_;       /* y-stride */
-  const int    so          = 2 * oW_ * oH_; /* s-stride */
-  double       x           = k->x / xper;
-  double       y           = k->y / xper;
-  double       sigma       = k->sigma / xper;
+  const double magnif = 3.0;
+  const int NBO = 8;
+  const int NBP = 4;
+  double xper = pow (2.0, oCur_);
+  const int xo = 2;
+  const int yo = 2 * oW_;
+  const int so = 2 * oW_ * oH_;
+  double x = k->x / xper;
+  double y = k->y / xper;
+  double sigma = k->sigma / xper;
 
-  int          xi          = (int) (x + 0.5);
-  int          yi          = (int) (y + 0.5);
-  int          si          = k->is;
+  int xi = (int) (x + 0.5);
+  int yi = (int) (y + 0.5);
+  int si = k->is;
 
   const double st0         = sin (angle);
   const double ct0         = cos (angle);
@@ -905,9 +912,9 @@ Sift::convtransp (double* dst,
       for(int i = 0; i < width; ++i)
         {
           double acc = 0.0;
-          double const *g = filt;
-          double const *start = src + (i - filt_width);
-          double const *stop;
+          const double *g = filt;
+          const double *start = src + (i - filt_width);
+          const double *stop;
           double x;
 
           /* beginning */

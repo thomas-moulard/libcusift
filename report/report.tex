@@ -40,10 +40,10 @@ majeurs:
   (au lieu d'écrire les algorithmes pour un nombre de coeurs particulier).
 \end{itemize}
 
-Le but d'une implémentation GPU étant d'accélérer le calcul des points
-d'intérêt d'une image. Une application nécessitant des calculs rapide de points
-SIFT est la vision robotique: on peut imaginer un robot aillant besoin
-d'appliquer un traitement comportant un SIFT pour chaque image capturée par
+Le but d'une implémentation sur GPU est d'accélérer le calcul des points
+d'intérêt d'une image. Par exemple, une application pouvant nécessiter des
+calculs rapide de points SIFT est la vision robotique: on peut imaginer un
+robot aillant besoin d'appliquer un traitement pour chaque image capturée par
 sa caméra. Dans ce cas, le débit des images à traiter impose une durée maximum
 de traitement pour chaque image et par extension une durée maximum pour le
 calcul des points d'intérêt.
@@ -61,7 +61,7 @@ calcul des points d'intérêt.
 \section{Introduction}
 
 La \autoref{fig:orig} est l'image d'entrée qui sera utilisée comme illustration
-tout au long du rapport. Cette image est disponible dans l'implémentation SIFT
+tout au long de ce rapport. Cette image est disponible dans l'implémentation SIFT
 ``Feat''. Cette implémentation a servi de socle au développement de ce projet,
 en particulier en ce qui concerne la représentation mémoire. L'implémentation
 de ce projet diffère de cette dernière par l'utilisation de CUDA, des
@@ -86,14 +86,14 @@ La réalisation de ce projet s'est déroulé en plusieurs étapes:
 \end{itemize}
 
 \vspace{0.5cm} Le binaire généré par le projet teste l'image d'entrée dans les
-mêmes conditions (nombre d'octave, d'échelle, \ldots) que la binaire de Feat
-afin que les résultats puissent être comparable. Le résultat des deux
-implémentations est relativement similaire (quoique légèrement différent, ceci
-est lié entre autre à l'utilisation de \texttt{double} dans cette
-implémentation et de \texttt{float} dans Feat).
+mêmes conditions (nombre d'octave, d'échelle, \ldots) que le binaire de
+``Feat'' afin que les résultats puissent être comparable. Le résultat des deux
+implémentations est relativement similaire (la différence tient, par
+exemple, au fait ``Feat'' utilise des \texttt{float} et cette implémentation
+des \texttt{double}).
 
 
-Pour compiler le projet, il est nécessaire de la placer dans le dossier
+Pour compiler le projet, il est nécessaire de le placer dans le dossier
 \texttt{projects} du SDK de CUDA. Taper la commande \texttt{make} permets
 ensuite de générer un binaire nommé \texttt{cusift} dans le dossier
 \texttt{bin} du SDK.
@@ -121,9 +121,9 @@ L'implémentation suit la procédure décrite par David Lowe:
 
 La première étape consiste en la création d'images de plus en plus floutées
 afin de couvrir le ``scape space'' (ce qui permets d'être invariant aux
-changements d'échelles).
+changements d'échelle).
 
-Cette série d'image est décomposée en octave et en échelle (``scale'').  On
+Cette série d'image est décomposée en octaves et en échelles (``scale'').  On
 passe d'une octave à une autre en sous-échantillonnant une image de l'octave
 précédente.
 Dans une octave, on passe d'une échelle à une autre en convoluant l'image par
@@ -196,19 +196,20 @@ différences de gaussiennes. Le schéma est toujours le même:
 \end{itemize}
 
 Dans cet exemple, chaque échelle et chaque ligne de l'image est calculée
-séparament en parallèle.
+séparément en parallèle.
 
 
 Parmi les optimisations que l'on pourrait réaliser, deux pourraient augmenter
 de manière significatives les performances: tout d'abord éviter d'allouer et
 libérer en permanence la mémoire. Il faudrait mieux allouer l'ensemble de
 l'espace nécessaire à l'initialisation et tout libérer à la fin. Le seul défaut
-de cette méthode est que cela nécessite beaucoup de mémoire dans la carte
-graphique. D'autre part, il serait souhaitable de rendre certains appels
-asynchrones car l'ensemble d'une étape n'est pas forcément nécessaire pour
-calculer l'étape suivante. En particulier, les dernières octaves peuvent être
-calculées très rapidement car la taille de celles-ci est très inférieure à
-celle de l'octave minimum calculée.
+de cette méthode est qu'elle consomme bien plus de mémoire puisque tout est
+alloué simultanément.. D'autre part, il serait souhaitable de rendre certains
+appels asynchrones car l'ensemble d'une étape n'est pas forcément nécessaire
+pour calculer l'étape suivante. En particulier, les dernières octaves peuvent
+être calculées très rapidement car la taille de celles-ci est très inférieure à
+celle de l'octave minimum calculée. Ce type de comportement est gérable via les
+fonctionnalités avancées de CUDA.
 
 
 \begin{figure}[htbp]
@@ -266,6 +267,5 @@ mémoire est difficile et des performances maximales nécessite une connaissance
 approfondie du comportement de la bibliothèque. La manipulation de nombreux
 pointeurs rends également le code difficilement maintenable (par exemple le
 typage ne différencie pas la mémoire GPU de la mémoire CPU).
-
 
 \end{document}

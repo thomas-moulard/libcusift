@@ -858,12 +858,6 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
       double hm = hist [(i - 1 + nbins) % nbins];
       double hp = hist [(i + 1 + nbins) % nbins];
 
-//       DEBUG() << "+++" << std::endl
-//                 << h0 << ">" << .8 * maxh << std::endl
-//                 << h0 << ">" << hm << std::endl
-//                 << h0 << ">" << hp << std::endl
-//                 << "---" << std::endl;
-
       /* is this a peak? */
       if (h0 > .8 * maxh && h0 > hm && h0 > hp)
         {
@@ -885,13 +879,13 @@ Sift::copy_and_upsample_rows (double* dst,
                              int width, int height)
 {
   DEBUG() << "+copy_and_upsample_rows" << std::endl;
-  int x, y;
-  double a, b;
 
-  for (y = 0; y < height; ++y)
+  for (int y = 0; y < height; ++y)
     {
-      b = a = *src++;
-      for (x = 0; x < width - 1; ++x)
+      double a = *src++;
+      double b = a;
+
+      for (int x = 0; x < width - 1; ++x)
         {
           b = *src++;
           *dst = a; dst += height;
@@ -942,8 +936,7 @@ Sift::copy_and_downsample (double* dst,  const double* src,
   double* dev_src = d_malloc<double> (size_src);
 
   cudaMemcpy (dev_src, src, size_src, cudaMemcpyHostToDevice);
-  std::cout << "height: " << height << std::endl;
-  _copy_and_downsample <<<height/d, 32>>> (dev_dst, dev_src, width, height, d);
+  _copy_and_downsample <<<height/d, 1>>> (dev_dst, dev_src, width, height, d);
    cudaMemcpy (dst, dev_dst, size_dst, cudaMemcpyDeviceToHost);
 
   d_free (dev_dst);

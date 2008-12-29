@@ -5,6 +5,18 @@
 #include <sstream>
 #include "sift.hh"
 
+#ifndef NDEBUG
+# define DEBUG_DUMP_IMAGE(PREFIX, SRC)                                  \
+  for (int s = s_min; s <= s_max - 1; ++s)                              \
+    {                                                                   \
+      std::ostringstream ss;                                            \
+      ss << (PREFIX) << "." << oCur_ << "." << s << ".bmp";             \
+      dumpDoubleImage ((SRC) + (s-s_min) * oW_ * oH_, oW_, oH_, ss.str()); \
+    }
+#else
+# define DEBUG_DUMP_IMAGE(PREFIX, SRC)
+#endif //! NDEBUG
+
 Sift::Sift (const IplImage& src_, double pt, double et, double nt,
             int O_, int S_, int o_min_)
   : n_keys (0),
@@ -376,19 +388,16 @@ Sift::extract ()
 
 // Parallel version of difference of gaussian.
 //
-// blockId == scale
-// threadId == row number
+// blockId == row number
+// threadId == scale
 __global__ void
-compute_dog_row (Sift* s)
+compute_dog_row (double* dev_dog, double* dev_oct, int w, int h, int s_min)
 {
-  double* pt = s->dog_;
-  double* src_a = s->get_octave (s->s_min + blockDim.x);
-  double* src_b = s->get_octave (s->s_min + blockDim.x + 1);
-
-  src_a += threadIdx.x * s->oW_;
-  src_b += threadIdx.x * s->oW_;
-
-  double* end_a = src_a + s->oW_;
+  const int s  = s_min + threadIdx.x;
+  double* pt = dev_dog + (s-s_min)*w*h + w*blockIdx.x;
+  double* src_a = dev_oct + (s-s_min)*w*h + w*blockIdx.x;
+  double* src_b = dev_oct + (s-s_min+1)*w*h + w*blockIdx.x;
+  double* end_a = src_a + w;
   while (src_a != end_a)
     *pt++ = *src_b++ - *src_a++;
 }
@@ -396,25 +405,23 @@ compute_dog_row (Sift* s)
 void
 Sift::compute_dog ()
 {
-//   std::cout << "+compute_dog" << std::endl;
-//   compute_dog_row<<<s_max - s_min - 1, oH_ - 1>>> (this);
+  DEBUG() << "+compute_dog" << std::endl;
 
-// #if 0
-  double* pt = dog_;
-  for (int s = s_min; s <= s_max - 1; ++s)
-    {
-      double* src_dog = pt;
+  double* dev_dog = d_malloc<double> (s*(s_max-s_min));
+  double* dev_oct = d_malloc<double> (s*(s_max-s_min+1));
 
-      double* src_a = get_octave (s);
-      double* src_b = get_octave (s + 1);
-      double* end_a = src_a + oW_ * oH_;
-      while (src_a != end_a)
-        *pt++ = *src_b++ - *src_a++;
+  cudaMemcpy (dev_dog, dog_, s*(s_max-s_min), cudaMemcpyHostToDevice);
+  cudaMemcpy (dev_oct, octave_, s*(s_max-s_min+1), cudaMemcpyHostToDevice);
 
-      std::ostringstream ss; ss << "dog-" << oCur_ << "-" << s << ".bmp";
-      dumpDoubleImage (src_dog, oW_, oH_, ss.str());
-    }
-  ///#endif
+  compute_dog_row<<<oH_, s_max - s_min>>> (dev_dog, dev_oct, oW_, oH_, s_min);
+
+  cudaMemcpy (dog_, dev_dog, s*(s_max-s_min), cudaMemcpyDeviceToHost);
+
+  d_free (dev_oct);
+  d_free (dev_dog);
+
+  DEBUG_DUMP_IMAGE("dog", dog_);
+  DEBUG() << "-compute_dog" << std::endl;
 }
 
 

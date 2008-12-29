@@ -33,6 +33,29 @@ h_malloc (size_t s)
   return static_cast<T*> (malloc (s));
 }
 
+template <typename T>
+inline void
+h_free (T* ptr)
+{
+  free (ptr);
+}
+
+template <typename T>
+inline T*
+d_malloc (size_t s)
+{
+  T* res;
+  cudaMalloc ((void**)&res, s);
+  return res;
+}
+
+template <typename T>
+inline void
+d_free (T* ptr)
+{
+  cudaFree (ptr);
+}
+
 
 /******************************************
  * Fast math                              *

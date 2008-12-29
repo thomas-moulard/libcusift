@@ -47,7 +47,7 @@ public:
   ~Sift ();
   features_t extract ();
 
-protected:
+public:
   double fast_expn (double x)
   {
     return ::fast_expn (x, expn_tab_);
@@ -71,6 +71,7 @@ protected:
   }
 
   void compute_dog ();
+
   void detect_maxima ();
   void compute_maxima ();
   void refine_maxima ();
@@ -122,7 +123,7 @@ public:
   const int h;
   const int s;
 
-private:
+public:
   double sigmak_;
   double sigman_;
   double sigma0_;

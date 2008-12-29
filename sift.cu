@@ -69,23 +69,23 @@ Sift::~Sift ()
 
   DEBUG() << "Free keys" << std::endl;
   if (keys)
-    free (keys);
+    h_free<SiftKeypoint> (keys);
 
   DEBUG() << "Free image (double)" << std::endl;
-  free (im_);
+  h_free<double> (im_);
 
   DEBUG() << "Free temp buffer" << std::endl;
-  free (tmp_);
+  h_free<double> (tmp_);
   DEBUG() << "Free difference of gaussians" << std::endl;
-  free (dog_);
+  h_free<double> (dog_);
   DEBUG() << "Free gradient data" << std::endl;
-  free (gradient_);
+  h_free<double> (gradient_);
   DEBUG() << "Free octave" << std::endl;
-  free (octave_);
+  h_free<double> (octave_);
 
   DEBUG() << "Free filter buffer" << std::endl;
   if (!!filt_)
-    free (filt_);
+    h_free<double> (filt_);
   DEBUG() << "-Sift::~Sift ()" << std::endl;
 }
 
@@ -353,7 +353,6 @@ Sift::extract ()
           double angles[4];
           memset (angles, 0, sizeof(double) * 4);
           int n_angles = compute_keypoint_orientation (i, angles);
-          //DEBUG() << "n_angles: " << n_angles << std::endl;
           for (int q=0; q < n_angles; ++q)
             {
               double descr[128];
@@ -375,9 +374,32 @@ Sift::extract ()
     }
 }
 
+// Parallel version of difference of gaussian.
+//
+// blockId == scale
+// threadId == row number
+__global__ void
+compute_dog_row (Sift* s)
+{
+  double* pt = s->dog_;
+  double* src_a = s->get_octave (s->s_min + blockDim.x);
+  double* src_b = s->get_octave (s->s_min + blockDim.x + 1);
+
+  src_a += threadIdx.x * s->oW_;
+  src_b += threadIdx.x * s->oW_;
+
+  double* end_a = src_a + s->oW_;
+  while (src_a != end_a)
+    *pt++ = *src_b++ - *src_a++;
+}
+
 void
 Sift::compute_dog ()
 {
+//   std::cout << "+compute_dog" << std::endl;
+//   compute_dog_row<<<s_max - s_min - 1, oH_ - 1>>> (this);
+
+// #if 0
   double* pt = dog_;
   for (int s = s_min; s <= s_max - 1; ++s)
     {
@@ -392,6 +414,7 @@ Sift::compute_dog ()
       std::ostringstream ss; ss << "dog-" << oCur_ << "-" << s << ".bmp";
       dumpDoubleImage (src_dog, oW_, oH_, ss.str());
     }
+  ///#endif
 }
 
 
@@ -448,8 +471,6 @@ Sift::detect_maxima ()
               if (CHECK_NEIGHBORS(>,+) ||
                   CHECK_NEIGHBORS(<,-) )
                 {
-                  printf("%f ! %f ! %f\n", v, .8*peak_threshold, *(pt + xo));
-
                   /* make room for more keypoints */
                   if (n_keys >= n_keys_res)
                     {
@@ -472,8 +493,6 @@ Sift::detect_maxima ()
         }
       pt += 2 * yo;
     }
-  DEBUG() << peak_threshold << std::endl;
-  DEBUG() << "(" << n_keys_res << " reserved keys)." << std::endl;
   DEBUG() << "-Detect maxima (" << n_keys << " points detected)." << std::endl;
 }
 
@@ -907,7 +926,7 @@ Sift::convtransp (double* dst,
             const double* filt,
             int width, int height, int filt_width)
 {
-  DEBUG() << "+convtransp " << width << "/" << height << "/" << filt_width << std::endl;
+  DEBUG() << "+convtransp" << std::endl;
 
   for(int j = 0; j < height; ++j)
     {
@@ -920,24 +939,18 @@ Sift::convtransp (double* dst,
           double x;
 
           /* beginning */
-          //DEBUG() << "+b" << std::endl;
           stop = src + max (0, i - filt_width);
           x    = *stop;
           while (start <= stop) { acc += (*g++) * x; start++; }
-          //DEBUG() << "-b" << std::endl;
 
           /* middle */
-          //DEBUG() << "+m" << std::endl;
           stop =  src + min (width - 1, i + filt_width);
           while (start <  stop) acc += (*g++) * (*start++);
-          //DEBUG() << "-m" << std::endl;
 
           /* end */
-          //DEBUG() << "+e" << std::endl;
           x  = *start;
           stop = src + (i + filt_width);
           while (start <= stop) { acc += (*g++) * x; start++; }
-          //DEBUG() << "-e" << std::endl;
 
           /* save */
           *dst = acc;
@@ -958,7 +971,7 @@ Sift::imsmooth(double* dst,
          double  const* src,
          int width, int height, double sigma)
 {
-  DEBUG() << "+imsmooth " << width << "/" << height << "/" << sigma << std::endl;
+  DEBUG() << "+imsmooth" << std::endl;
 
   if (sigma < (double)(1e-5))
     {
@@ -979,7 +992,7 @@ Sift::imsmooth(double* dst,
         {
           DEBUG() << "alloc" << std::endl;
           if (!!filt_)
-            free (filt_);
+            h_free<double> (filt_);
           filt_ = h_malloc<double>  (sizeof(double) * (2*filt_width_+1));
           filt_res_ = 2 * filt_width_ + 1;
         }
@@ -998,10 +1011,8 @@ Sift::imsmooth(double* dst,
     }
 
   /* convolve */
-  DEBUG() << "convtransp 1" << std::endl;
   convtransp (temp, src, filt_,
               width, height, filt_width_);
-  DEBUG() << "convtransp 2" << std::endl;
   convtransp (dst, temp, filt_,
               height, width, filt_width_);
   DEBUG() << "-imsmooth" << std::endl;

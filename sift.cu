@@ -870,6 +870,44 @@ Sift::copy_and_downsample (double* dst,  const double* src,
   DEBUG() << "-copy_and_downsample" << std::endl;
 }
 
+__global__ void
+_convtransp (double* dst, const double* src, const double* filt,
+             int width, int height, int filt_width)
+{
+  int j = blockIdx.x;
+  src += j * width;
+  dst += j * width * height - (j * (width*height - 1));
+
+  int part = width/blockDim.x;
+  int start = threadIdx.x * part;
+  int end = start + part;
+
+  for(int i = start; i < end; ++i)
+    {
+      double acc = .0;
+      const double *g = filt;
+      const double *start = src + (i - filt_width);
+      const double *stop;
+      double x;
+
+      stop = src + max (0, i - filt_width);
+      x = *stop;
+      while (start <= stop) { acc += (*g++) * x; start++; }
+
+      stop =  src + min (width - 1, i + filt_width);
+      while (start <  stop) acc += (*g++) * (*start++);
+
+      x = *start;
+      stop = src + (i + filt_width);
+      while (start <= stop) { acc += (*g++) * x; start++; }
+
+      *dst = acc;
+      dst += height;
+
+      assert (g - filt == 2 * filt_width +1);
+    }
+}
+
 void
 Sift::convtransp (double* dst,
             const double* src,
@@ -878,35 +916,21 @@ Sift::convtransp (double* dst,
 {
   DEBUG() << "+convtransp" << std::endl;
 
-  for(int j = 0; j < height; ++j)
-    {
-      for(int i = 0; i < width; ++i)
-        {
-          double acc = .0;
-          const double *g = filt;
-          const double *start = src + (i - filt_width);
-          const double *stop;
-          double x;
+  const int size = width*height*sizeof (double);
+  const int filt_size = (2*filt_width_+1)*sizeof (double);
+  double* dev_src = d_malloc<double> (size);
+  double* dev_filt = d_malloc<double> (filt_size);
+  double* dev_dst = d_malloc<double> (size);
 
-          stop = src + max (0, i - filt_width);
-          x    = *stop;
-          while (start <= stop) { acc += (*g++) * x; start++; }
+  cudaMemcpy (dev_src, src, size, cudaMemcpyHostToDevice);
+  cudaMemcpy (dev_filt, filt_, filt_size, cudaMemcpyHostToDevice);
+  _convtransp <<<height, 1>>> (dev_dst, dev_src, dev_filt, width, height, filt_width);
+  cudaMemcpy (dst, dev_dst, size, cudaMemcpyDeviceToHost);
 
-          stop =  src + min (width - 1, i + filt_width);
-          while (start <  stop) acc += (*g++) * (*start++);
+  d_free (dev_src);
+  d_free (dev_filt);
+  d_free (dev_dst);
 
-          x  = *start;
-          stop = src + (i + filt_width);
-          while (start <= stop) { acc += (*g++) * x; start++; }
-
-          *dst = acc;
-          dst += height;
-
-          assert (g - filt == 2 * filt_width +1);
-        }
-      src += width;
-      dst -= width*height - 1;
-    }
   DEBUG() << "-convtransp" << std::endl;
 }
 

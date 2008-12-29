@@ -61,7 +61,7 @@ calcul des points d'intérêt.
 \section{Introduction}
 
 La \autoref{fig:orig} est l'image d'entrée qui sera utilisée comme illustration
-tout au long du rapport. Cette image est disponible dans l'implementation SIFT
+tout au long du rapport. Cette image est disponible dans l'implémentation SIFT
 ``Feat''. Cette implémentation a servi de socle au développement de ce projet,
 en particulier en ce qui concerne la représentation mémoire. L'implémentation
 de ce projet diffère de cette dernière par l'utilisation de CUDA, des
@@ -100,7 +100,7 @@ ensuite de générer un binaire nommé \texttt{cusift} dans le dossier
 
 Deux variables d'environnement permettent de modifier la compilation du programme:
 \begin{itemize}
-\item \texttt{emu} : permerts d'émuler CUDA (afin de pouvoir executer les
+\item \texttt{emu} : permets d'émuler CUDA (afin de pouvoir executer les
   programmes sur une ordinateur ne possédant pas de carte graphique compatible
   CUDA).
 \item \texttt{dbg} : mode de débuggage (sortie verbeuse, toutes les images
@@ -124,7 +124,7 @@ afin de couvrir le ``scape space'' (ce qui permets d'être invariant aux
 changements d'échelles).
 
 Cette série d'image est décomposée en octave et en échelle (``scale'').  On
-passe d'une octave à une autre en sous-échantillonant une image de l'octave
+passe d'une octave à une autre en sous-échantillonnant une image de l'octave
 précédente.
 Dans une octave, on passe d'une échelle à une autre en convoluant l'image par
 une gaussienne.

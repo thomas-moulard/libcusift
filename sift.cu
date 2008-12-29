@@ -410,11 +410,8 @@ Sift::compute_dog ()
   double* dev_dog = d_malloc<double> (s*(s_max-s_min));
   double* dev_oct = d_malloc<double> (s*(s_max-s_min+1));
 
-  cudaMemcpy (dev_dog, dog_, s*(s_max-s_min), cudaMemcpyHostToDevice);
   cudaMemcpy (dev_oct, octave_, s*(s_max-s_min+1), cudaMemcpyHostToDevice);
-
   compute_dog_row<<<oH_, s_max - s_min>>> (dev_dog, dev_oct, oW_, oH_, s_min);
-
   cudaMemcpy (dog_, dev_dog, s*(s_max-s_min), cudaMemcpyDeviceToHost);
 
   d_free (dev_oct);
@@ -908,22 +905,50 @@ Sift::copy_and_upsample_rows (double* dst,
   DEBUG() << "-copy_and_upsample_rows" << std::endl;
 }
 
+/*
+ * Parallelized version of copy_and_downsample.
+ * block == row
+ * thread == 1/32nth of a row
+ */
+__global__ void
+_copy_and_downsample (double* dst, const double* src,
+                           int width, int height, int d)
+{
+  const int y = d * blockIdx.x;
+  const int line = width-d+1;
+  const int start = threadIdx.x*line/blockDim.x;
+  const int end = start + (line/blockDim.x);
+  const double* srcrowp = src + y * width + start;
+  dst += (width-d+2)/d*y/d + start/d;
+
+  for (int x = start; x < end; x+=d)
+    {
+      *dst++ = *srcrowp;
+      srcrowp += d;
+    }
+}
+
+
 void
 Sift::copy_and_downsample (double* dst,  const double* src,
                            int width, int height, int d)
 {
   DEBUG() << "+copy_and_downsample" << std::endl;
 
-  d = 1 << d; /* d = 2^d */
-  for (int y = 0; y < height; y+=d)
-    {
-      const double* srcrowp = src + y * width;
-      for (int x = 0; x < width - (d-1); x+=d)
-        {
-          *dst++ = *srcrowp;
-          srcrowp += d;
-        }
-    }
+  d = 1 << d; // d = 2^d
+  int size_src = width*height*sizeof (double);
+  int size_dst = (int) (floor ((width+1)/d)*floor ((height+1)/d)*sizeof (double));
+  double* dev_dst = d_malloc<double> (size_dst);
+  double* dev_src = d_malloc<double> (size_src);
+
+  cudaMemcpy (dev_src, src, size_src, cudaMemcpyHostToDevice);
+  std::cout << "height: " << height << std::endl;
+  _copy_and_downsample <<<height/d, 32>>> (dev_dst, dev_src, width, height, d);
+   cudaMemcpy (dst, dev_dst, size_dst, cudaMemcpyDeviceToHost);
+
+  d_free (dev_dst);
+  d_free (dev_src);
+
   DEBUG() << "-copy_and_downsample" << std::endl;
 }
 

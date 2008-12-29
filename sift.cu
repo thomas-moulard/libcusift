@@ -35,7 +35,7 @@ Sift::Sift (const IplImage& src_, double pt, double et, double nt,
     h (src.height),
     s (shift_left (w, -o_min) * shift_left (h, -o_min) * sizeof (double)),
     sigmak_ (pow(2.0, 1.0 / S_)), // 2^(1/S)
-    sigman_ (0.5),
+    sigman_ (.5),
     sigma0_ (1.6 * sigmak_),
     dsigma0_ (sigma0_ * sqrt (1.0 - 1.0/(sigmak_*sigmak_))), // sigma0 * sqrt(1 - 1/sigmak²)
     oCur_ (o_min_),
@@ -120,11 +120,8 @@ Sift::process ()
 
   if (o_min < 0)
     {
-      /* double once */
       copy_and_upsample_rows (tmp_, im_, w, h);
       copy_and_upsample_rows (octave, tmp_, h, 2 * w);
-
-      /* double more */
       for (int o = -1; o > o_min; --o)
         {
           copy_and_upsample_rows (tmp_, octave,
@@ -138,7 +135,6 @@ Sift::process ()
   else
     memcpy(octave, im_, w*h*sizeof (double));
 
-  // adjust smoothing.
   double sa = sigma0_ * pow (sigmak_, s_min);
   double sb = sigman_ * pow (2.0, -o_min);
 
@@ -212,7 +208,7 @@ Sift::process_next ()
 double
 Sift::normalize_histogram (double *begin, double *end)
 {
-  double norm = 0.0;
+  double norm = .0;
   for (double* iter = begin ; iter != end ; ++iter)
     norm += (*iter) * (*iter);
   norm = sqrt (norm) + SINGLE_EPSILON;
@@ -240,77 +236,55 @@ Sift::compute_keypoint_descriptor(double descr[128], int ind, double angle)
   double y = k->y / xper;
   double sigma = k->sigma / xper;
 
-  int xi = (int) (x + 0.5);
-  int yi = (int) (y + 0.5);
+  int xi = (int) (x + .5);
+  int yi = (int) (y + .5);
   int si = k->is;
 
-  const double st0         = sin (angle);
-  const double ct0         = cos (angle);
-  const double SBP         = magnif * sigma;
-  const int W           = (int)floor
-    (sqrt(2.0) * SBP * (NBP + 1) / 2.0 + 0.5);
+  const double st0 = sin (angle);
+  const double ct0 = cos (angle);
+  const double SBP = magnif * sigma;
+  const int W = (int)floor (sqrt(2.0) * SBP * (NBP + 1) / 2.0 + .5);
 
-  const int binto = 1;          /* bin theta-stride */
-  const int binyo = NBO * NBP;  /* bin y-stride */
-  const int binxo = NBO;        /* bin x-stride */
+  const int binto = 1;
+  const int binyo = NBO * NBP;
+  const int binxo = NBO;
 
-  /* check bounds */
   if(k->o  != oCur_ || xi <  0 || xi >= oW_ || yi <  0 ||
      yi >= oH_ - 1 || si < s_min + 1 || si > s_max - 2)
     return;
 
-  /* synchronize gradient buffer */
   update_gradient ();
 
-  /* clear descriptor */
   memset (descr, 0, sizeof(double) * NBO*NBP*NBP);
 
-  /* Center the scale space and the descriptor on the current keypoint.
-   * Note that dpt is pointing to the bin of center (SBP/2,SBP/2,0).
-   */
   const double* pt  = gradient_ + xi*xo + yi*yo + (si - s_min - 1)*so;
   double* dpt = descr + (NBP/2) * binyo + (NBP/2) * binxo;
 
-  /*
-   * Process pixels in the intersection of the image rectangle
-   * (1,1)-(M-1,N-1) and the keypoint bounding box.
-   */
   for(int dyi =  max (-W, 1 - yi); dyi <= min (W, oH_ - yi - 2); ++dyi)
     for(int dxi =  max (-W, 1 - xi); dxi <= min (W, oW_ - xi - 2); ++ dxi)
       {
-        /* retrieve */
-        double mod   = * (pt + dxi*xo + dyi*yo + 0);
-        double angle_ = * (pt + dxi*xo + dyi*yo + 1);
+        double mod   = *(pt + dxi*xo + dyi*yo + 0);
+        double angle_ = *(pt + dxi*xo + dyi*yo + 1);
         double theta = mod_2pi (angle_ - angle);
 
-        /* fractional displacement */
         double dx = xi + dxi - x;
         double dy = yi + dyi - y;
 
-        /* get the displacement normalized w.r.t. the keypoint
-           orientation and extension */
         double nx = (ct0 * dx + st0 * dy) / SBP;
         double ny = (-st0 * dx + ct0 * dy) / SBP;
         double nt = NBO * theta / (2 * M_PI);
 
-        /* Get the Gaussian weight of the sample. The Gaussian window
-         * has a standard deviation equal to NBP/2. Note that dx and dy
-         * are in the normalized frame, so that -NBP/2 <= dx <=
-         * NBP/2. */
         double const wsigma = NBP/2;
         double win = fast_expn
           ((nx*nx + ny*ny)/(2.0 * wsigma * wsigma));
 
-        /* The sample will be distributed in 8 adjacent bins.
-           We start from the ``lower-left'' bin. */
-        int binx = (int)floor (nx - 0.5);
-        int biny = (int)floor (ny - 0.5);
+        int binx = (int)floor (nx - .5);
+        int biny = (int)floor (ny - .5);
         int bint = (int)floor (nt);
-        double rbinx = nx - (binx + 0.5);
-        double rbiny = ny - (biny + 0.5);
+        double rbinx = nx - (binx + .5);
+        double rbiny = ny - (biny + .5);
         double rbint = nt - bint;
 
-        /* Distribute the current sample into the 8 adjacent bins*/
         for(int dbinx = 0; dbinx < 2; ++dbinx)
           for(int dbiny = 0; dbiny < 2; ++dbiny)
             for(int dbint = 0; dbint < 2; ++dbint)
@@ -330,20 +304,16 @@ Sift::compute_keypoint_descriptor(double descr[128], int ind, double angle)
               }
       }
 
-  /* Normalize the histogram to L2 unit length. */
   double norm = normalize_histogram (descr, descr + NBO*NBP*NBP);
 
-  /* Set the descriptor to zero if it is lower than our norm_threshold */
   if(norm_threshold && norm <  norm_threshold)
     for (int bin = 0; bin < NBO*NBP*NBP; ++ bin)
       descr [bin] = 0;
   else
     {
-      /* Truncate at 0.2. */
       for(int bin = 0; bin < NBO*NBP*NBP; ++ bin)
         if (descr [bin] > 0.2) descr [bin] = 0.2;
 
-      /* Normalize again. */
       normalize_histogram (descr, descr + NBO*NBP*NBP);
     }
 }
@@ -460,9 +430,9 @@ void
 Sift::detect_maxima ()
 {
   DEBUG() << "+Detect maxima" << std::endl;
-  const int xo = 1;         /* x-stride */
-  const int yo = oW_;       /* y-stride */
-  const int so = oW_ * oH_; /* s-stride */
+  const int xo = 1;
+  const int yo = oW_;
+  const int so = oW_ * oH_;
   double* pt  = dog_ + xo + yo + so;
 
   for (int s = s_min + 1; s <= s_max - 2; ++s)
@@ -475,7 +445,7 @@ Sift::detect_maxima ()
               if (CHECK_NEIGHBORS(>,+) ||
                   CHECK_NEIGHBORS(<,-) )
                 {
-                  /* make room for more keypoints */
+                  // Allocate keypoints.
                   if (n_keys >= n_keys_res)
                     {
                       n_keys_res += 500;
@@ -515,9 +485,10 @@ Sift::refine_maxima ()
   double* pt = 0;
   double xper  = pow (2.0, oCur_);
 
-  const int xo = 1;         /* x-stride */
-  const int yo = oW_;       /* y-stride */
-  const int so = oW_ * oH_; /* s-stride */
+  // Offset
+  const int xo = 1;
+  const int yo = oW_;
+  const int so = oW_ * oH_;
 
   for (int i = 0; i < n_keys; ++i)
     {
@@ -537,9 +508,10 @@ Sift::refine_maxima ()
 
           pt = dog_ + xo * x + yo * y + so * (s - s_min);
 
-          Dx = 0.5 * (at(+1,0,0) - at(-1,0,0));
-          Dy = 0.5 * (at(0,+1,0) - at(0,-1,0));
-          Ds = 0.5 * (at(0,0,+1) - at(0,0,-1));
+          // Hessian
+          Dx = .5 * (at(+1,0,0) - at(-1,0,0));
+          Dy = .5 * (at(0,+1,0) - at(0,-1,0));
+          Ds = .5 * (at(0,0,+1) - at(0,0,-1));
 
           Dxx = (at(+1,0,0) + at(-1,0,0) - 2.0 * at(0,0,0));
           Dyy = (at(0,+1,0) + at(0,-1,0) - 2.0 * at(0,0,0));
@@ -554,11 +526,9 @@ Sift::refine_maxima ()
             Aat(1,2) = Aat(2,1) = Dys;
 
           b[0] = - Dx, b[1] = - Dy, b[2] = - Ds;
-
-          /* Gauss elimination */
+          // Gauss
           for(int j = 0; j < 3; ++j)
             {
-              /* look for the maximally stable pivot */
               for (int i = j; i < 3; ++i)
                 {
                   double a = Aat (i,j), absa = abs (a);
@@ -566,14 +536,13 @@ Sift::refine_maxima ()
                     maxa = a, maxabsa = absa, maxi = i;
                 }
 
-              /* if singular give up */
+              // Singular.
               if (maxabsa < 1e-10f)
                 {
                   b[0] = 0, b[1] = 0, b[2] = 0;
                   break;
                 }
 
-              /* swap j-th row with i-th row and normalize j-th row */
               for(int jj = j; jj < 3; ++jj)
                 {
                   tmp = Aat(maxi,jj);
@@ -584,7 +553,6 @@ Sift::refine_maxima ()
               tmp = b[j]; b[j] = b[maxi]; b[maxi] = tmp;
               b[j] /= maxa;
 
-              /* elimination */
               for (int ii = j+1; ii < 3; ++ii)
                 {
                   double x = Aat(ii,j);
@@ -594,18 +562,12 @@ Sift::refine_maxima ()
                 }
             }
 
-          /* backward substitution */
           for (int i = 2; i > 0; --i)
             {
               double x = b[i];
               for (int ii = i-1; ii >= 0; --ii)
                 b[ii] -= x * Aat(ii,i);
             }
-
-          /* ........................................................... */
-          /* If the translation of the keypoint is big, move the keypoint
-           * and re-iterate the computation. Otherwise we are all set.
-           */
 
           dx= ((b[0] >  0.6 && x < oW_ - 2) ?  1 : 0)
             + ((b[0] < -0.6 && x > 1)       ? -1 : 0);
@@ -617,10 +579,9 @@ Sift::refine_maxima ()
             break;
         }
 
-      /* check threshold and other conditions */
       {
         double val   = at(0,0,0)
-          + 0.5 * (Dx * b[0] + Dy * b[1] + Ds * b[2]);
+          + .5 * (Dx * b[0] + Dy * b[1] + Ds * b[2]);
         double score = (Dxx+Dyy)*(Dxx+Dyy) / (Dxx*Dyy - Dxy*Dxy);
         double xn = x + b[0];
         double yn = y + b[1];
@@ -640,22 +601,6 @@ Sift::refine_maxima ()
           sn              >= s_min              &&
           sn              <= s_max;
 
-//         DEBUG() << "+++" << std::endl
-//                   << abs(val) << ">" << peak_threshold << std::endl
-//                   << score << "<"
-//                   << (edge_threshold+1)*(edge_threshold+1)/edge_threshold << std::endl
-//                   << score << ">=" << 0 << std::endl
-//                   << abs (b[0]) << "<" << 1.5 << std::endl
-//                   << abs (b[1]) << "<" << 1.5 << std::endl
-//                   << abs (b[2]) << "<" << 1.5 << std::endl
-//                   << xn << ">=" << 0 << std::endl
-//                   << xn << "<=" << oW_ - 1 << std::endl
-//                   << yn << ">=" << 0 << std::endl
-//                   << yn << "<=" << oH_ - 1 << std::endl
-//                   << sn << ">=" << s_min << std::endl
-//                   << sn << "<=" << s_max << std::endl
-//                   << "---" << std::endl;
-
         if (good)
           {
             k->o = oCur_;
@@ -665,17 +610,16 @@ Sift::refine_maxima ()
             k->sigma = sigma0_ * pow (2.0, sn/S) * xper;
             ++k;
           }
-      } /* done checking */
-    } /* next keypoint to refine */
+      }
+    }
 
-  /* update keypoint count */
   assert (k >= keys);
   n_keys = k - keys;
   DEBUG() << "-Refine maxima (" << n_keys << ")" << std::endl;
 }
 #undef at
 
-#define SAVE_BACK                                       \
+#define SAVE_BACK                                  \
   *grad++ = sqrt (gx*gx + gy*gy);                  \
   *grad++ = mod_2pi(atan2 (gy, gx) + 2*M_PI);      \
   ++src
@@ -684,9 +628,9 @@ Sift::refine_maxima ()
 void
 Sift::update_gradient ()
 {
-  const int xo = 1;         /* x-stride */
-  const int yo = oW_;       /* y-stride */
-  const int so = oW_ * oH_; /* s-stride */
+  const int xo = 1;
+  const int yo = oW_;
+  const int so = oW_ * oH_;
 
   if (oGrad_ == oCur_)
     return;
@@ -700,64 +644,54 @@ Sift::update_gradient ()
       double* grad = gradient_ + 2 * so * (s - s_min -1);
       src  = get_octave (s);
 
-      /* first first row */
-      gx = src[+xo] - src[0];
-      gy = src[+yo] - src[0];
+      gx = src[xo] - src[0];
+      gy = src[yo] - src[0];
       SAVE_BACK;
 
-      /* middle first row */
       end = (src - 1) + oW_ - 1;
       while (src < end)
         {
-          gx = 0.5 * (src[+xo] - src[-xo]);
-          gy =        src[+yo] - src[0];
+          gx = .5 * (src[xo] - src[-xo]);
+          gy =        src[yo] - src[0];
           SAVE_BACK;
         }
 
-      /* first first row */
       gx = src[0]   - src[-xo];
-      gy = src[+yo] - src[0];
+      gy = src[yo] - src[0];
       SAVE_BACK;
 
       for (int y = 1; y < oH_ -1; ++y)
         {
-          /* first middle row */
-          gx =        src[+xo] - src[0];
-          gy = 0.5 * (src[+yo] - src[-yo]);
+          gx = src[xo] - src[0];
+          gy = .5 * (src[yo] - src[-yo]);
           SAVE_BACK;
 
-          /* middle middle row */
           end = (src - 1) + oW_ - 1;
           while (src < end)
             {
-              gx = 0.5 * (src[+xo] - src[-xo]);
-              gy = 0.5 * (src[+yo] - src[-yo]);
+              gx = .5 * (src[xo] - src[-xo]);
+              gy = .5 * (src[yo] - src[-yo]);
               SAVE_BACK;
             }
 
-          /* last middle row */
-          gx =        src[0]   - src[-xo];
-          gy = 0.5 * (src[+yo] - src[-yo]);
+          gx = src[0] - src[-xo];
+          gy = .5 * (src[yo] - src[-yo]);
           SAVE_BACK;
         }
 
-      /* first last row */
-      gx = src[+xo] - src[0];
-      gy = src[  0] - src[-yo];
+      gx = src[xo] - src[0];
+      gy = src[0] - src[-yo];
       SAVE_BACK;
 
-      /* middle last row */
       end = (src - 1) + oW_ - 1;
       while (src < end)
         {
-          gx = 0.5 * (src[+xo] - src[-xo]);
-          gy =        src[0]   - src[-yo];
+          gx = .5 * (src[xo] - src[-xo]);
+          gy = src[0] - src[-yo];
           SAVE_BACK;
         }
-
-      /* last last row */
-      gx = src[0]   - src[-xo];
-      gy = src[0]   - src[-yo];
+      gx = src[0] - src[-xo];
+      gy = src[0] - src[-yo];
       SAVE_BACK;
     }
   oGrad_ = oCur_;
@@ -773,36 +707,33 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
   const double winf = 1.5;
   double xper = pow (2.0, oCur_);
 
-  const int xo = 2;             /* x-stride */
-  const int yo = 2 * oW_;       /* y-stride */
-  const int so = 2 * oW_ * oH_; /* s-stride */
+  // Offsets
+  const int xo = 2;
+  const int yo = 2 * oW_;
+  const int so = 2 * oW_ * oH_;
   double x = k->x/xper, y = k->y/xper;
   double sigma = k->sigma/xper;
 
-  int xi = (int) (x + 0.5),
-    yi = (int) (y + 0.5), si = k->is;
+  int xi = (int) (x + .5),
+    yi = (int) (y + .5), si = k->is;
 
   const double sigmaw = winf * sigma;
   int W = (int)max (floor (3.0 * sigmaw), 1.);
   const int nbins = 36;
   double hist [nbins], maxh;
 
-  /* skip if the keypoint octave is not current */
   if(k->o != oCur_)
     return 0;
 
-  /* skip the keypoint if it is out of bounds */
+  // Check bounds.
   if(xi < 0 || xi > oW_ - 1 || yi < 0 || yi > oH_ - 1 ||
      si < s_min + 1 || si > s_max - 2 )
     return 0;
 
-  /* make gradient up to date */
   update_gradient ();
 
-  /* clear histogram */
   memset (hist, 0, sizeof(double) * nbins);
 
-  /* compute orientation histogram */
   double* pt =  gradient_ + xo*xi + yo*yi + so*(si - s_min - 1);
 
   for (int ys  =  max (-W, -yi);
@@ -815,7 +746,6 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
         double r2 = dx*dx + dy*dy;
         double wgt, mod, ang, fbin;
 
-        /* limit to a circular window */
         if (r2 >= W*W + 0.6)
           continue;
 
@@ -824,13 +754,12 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
         ang  = *(pt + xs*xo + ys*yo + 1);
         fbin = nbins * ang / (2 * M_PI);
 
-        int    bin  = (int)floor (fbin - 0.5);
-        double rbin = fbin - bin - 0.5;
+        int    bin  = (int)floor (fbin - .5);
+        double rbin = fbin - bin - .5;
         hist [(bin + nbins) % nbins] += (1 - rbin) * mod * wgt;
         hist [(bin + 1    ) % nbins] += (rbin) * mod * wgt;
       }
 
-  /* smooth histogram */
   for (int iter = 0; iter < 6; iter++)
     {
       double prev  = hist [nbins - 1];
@@ -845,12 +774,10 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
       hist[i] = (prev + hist[i] + first) / 3.0;
     }
 
-  /* find the histogram maximum */
   maxh = 0;
   for (int i = 0; i < nbins; ++i)
     maxh = max (maxh, hist [i]);
 
-  /* find peaks within 80% from max */
   int n_angles = 0;
   for (int i = 0; i < nbins; ++i)
     {
@@ -858,12 +785,10 @@ Sift::compute_keypoint_orientation (int ind, double angles [4])
       double hm = hist [(i - 1 + nbins) % nbins];
       double hp = hist [(i + 1 + nbins) % nbins];
 
-      /* is this a peak? */
       if (h0 > .8 * maxh && h0 > hm && h0 > hp)
         {
-          /* quadratic interpolation */
-          double di = - 0.5 * (hp - hm) / (hp + hm - 2 * h0);
-          double th = 2 * M_PI * (i + di + 0.5) / nbins;
+          double di = - .5 * (hp - hm) / (hp + hm - 2 * h0);
+          double th = 2 * M_PI * (i + di + .5) / nbins;
           angles [n_angles++] = th;
           if (n_angles == 4)
             return n_angles;
@@ -889,7 +814,7 @@ Sift::copy_and_upsample_rows (double* dst,
         {
           b = *src++;
           *dst = a; dst += height;
-          *dst = 0.5 * (a + b); dst += height;
+          *dst = .5 * (a + b); dst += height;
           a = b;
         }
       *dst = b; dst += height;
@@ -957,33 +882,28 @@ Sift::convtransp (double* dst,
     {
       for(int i = 0; i < width; ++i)
         {
-          double acc = 0.0;
+          double acc = .0;
           const double *g = filt;
           const double *start = src + (i - filt_width);
           const double *stop;
           double x;
 
-          /* beginning */
           stop = src + max (0, i - filt_width);
           x    = *stop;
           while (start <= stop) { acc += (*g++) * x; start++; }
 
-          /* middle */
           stop =  src + min (width - 1, i + filt_width);
           while (start <  stop) acc += (*g++) * (*start++);
 
-          /* end */
           x  = *start;
           stop = src + (i + filt_width);
           while (start <= stop) { acc += (*g++) * x; start++; }
 
-          /* save */
           *dst = acc;
           dst += height;
 
           assert (g - filt == 2 * filt_width +1);
         }
-      /* next column */
       src += width;
       dst -= width*height - 1;
     }
@@ -1004,14 +924,12 @@ Sift::imsmooth(double* dst,
       return;
     }
 
-  /* window width */
   filt_width_ = (int) ceil (4.0 * sigma);
   DEBUG() << filt_width_ << "/" << filt_res_ << std::endl;
 
-  /* setup filter only if not available from previous iteration*/
   if (filt_sigma_ != sigma)
     {
-      double acc = 0.0;
+      double acc = .0;
 
       if ((2 * filt_width_ + 1) > filt_res_)
         {
@@ -1026,16 +944,14 @@ Sift::imsmooth(double* dst,
       for (int j = 0; j < 2 * filt_width_ + 1; ++j)
         {
           double  d = (double)(j - filt_width_) / (double)(sigma);
-          filt_ [j] = exp (- 0.5 * d * d);
+          filt_ [j] = exp (- .5 * d * d);
           acc += filt_ [j];
         }
 
-      /* normalize */
       for (int j = 0; j < 2 * filt_width_ + 1; ++j)
         filt_ [j] /= acc;
     }
 
-  /* convolve */
   convtransp (temp, src, filt_,
               width, height, filt_width_);
   convtransp (dst, temp, filt_,

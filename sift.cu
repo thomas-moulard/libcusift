@@ -144,8 +144,6 @@ Sift::process ()
       DEBUG() << "sa > sb => " << sd << std::endl;
       imsmooth (octave, tmp_, octave, oW_, oH_, sd);
     }
-  std::ostringstream ss; ss << "octave-" << oCur_ << "-" << s_min << ".bmp";
-  dumpDoubleImage (get_octave(s_min), oW_, oH_, ss.str());
 
   // compute octave.
   for (int s = s_min + 1; s <= s_max; ++s)
@@ -154,10 +152,8 @@ Sift::process ()
       double sd = dsigma0_ * pow (sigmak_, s);
       imsmooth (get_octave(s), tmp_,
                 get_octave(s - 1), oW_, oH_, sd);
-
-      std::ostringstream ss; ss << "octave-" << oCur_ << "-" << s << ".bmp";
-      dumpDoubleImage (get_octave(s), oW_, oH_, ss.str());
     }
+  DEBUG_DUMP_IMAGE("octave", octave_);
   DEBUG() << "-Process" << std::endl;
   return true;
 }
@@ -187,19 +183,15 @@ Sift::process_next ()
       double sd = sqrt (sa*sa - sb*sb);
       imsmooth (octave, tmp_, octave, oW_, oH_, sd);
     }
-  std::ostringstream ss; ss << "octave-" << oCur_ << "-" << s_min << ".bmp";
-  dumpDoubleImage (get_octave(s_min), oW_, oH_, ss.str());
 
   for(int s = s_min + 1 ; s <= s_max ; ++s)
     {
       double sd = dsigma0_ * pow (sigmak_, s);
       imsmooth (get_octave (s), tmp_,
                 get_octave (s - 1), oW_, oH_, sd);
-
-      std::ostringstream ss; ss << "octave-" << oCur_ << "-" << s << ".bmp";
-      dumpDoubleImage (get_octave (s), oW_, oH_, ss.str());
     }
 
+  DEBUG_DUMP_IMAGE("octave", octave_);
   DEBUG() << "-Process next" << std::endl;
   return true;
 }

@@ -1,0 +1,271 @@
+\documentclass{article}
+
+\usepackage[latin1]{inputenc}
+\usepackage[french]{babel}
+
+\usepackage{amsmath, amsthm, amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+
+%\RequirePackage{lstlisting}
+%\lstset{language=STL,aboveskip=0pt,belowskip=0pt}
+
+\title{Implémentation de SIFT avec CUDA}
+
+\author{Thomas Moulard}
+\date{27 décembre 2008}
+
+\begin{document}
+\maketitle
+
+\tableofcontents
+
+\newpage
+
+\section{Sujet du projet}
+
+Le but du projet est de réaliser une implémentation sur GPU de l'algorithme
+SIFT (Scale Invarient Feature Transform) tel qu'il a été décrit par David Lowe
+en 2004 dans l'article ``Distinctive image features from scale-invariant
+keypoints''.
+
+
+L'implémentation utilisera la technologie CUDA de nVidia afin de permettre de
+déporter les calculs vers la carte graphique. CUDA présente deux intérêts
+majeurs:
+\begin{itemize}
+\item d'avantage de facilité dans l'écriture de code parallèle
+\item la possibilité de passer à l'échelle afin de pouvoir supporter sans
+  effort supplémentaire des cartes graphiques possédant d'avantage de coeurs
+  (au lieu d'écrire les algorithmes pour un nombre de coeurs particulier).
+\end{itemize}
+
+Le but d'une implémentation GPU étant d'accélérer le calcul des points
+d'intérêt d'une image. Une application nécessitant des calculs rapide de points
+SIFT est la vision robotique: on peut imaginer un robot aillant besoin
+d'appliquer un traitement comportant un SIFT pour chaque image capturée par
+sa caméra. Dans ce cas, le débit des images à traiter impose une durée maximum
+de traitement pour chaque image et par extension une durée maximum pour le
+calcul des points d'intérêt.
+
+\vspace{1cm}
+
+\begin{figure}[htbp]
+   \begin{center}
+      \includegraphics[width=5cm]{smallex.jpg}
+   \end{center}
+   \caption{\footnotesize La démo de SIFT de David Lowe.}
+\end{figure}
+
+\newpage
+\section{Introduction}
+
+La \autoref{fig:orig} est l'image d'entrée qui sera utilisée comme illustration
+tout au long du rapport. Cette image est disponible dans l'implementation SIFT
+``Feat''. Cette implémentation a servi de socle au développement de ce projet,
+en particulier en ce qui concerne la représentation mémoire. L'implémentation
+de ce projet diffère de cette dernière par l'utilisation de CUDA, des
+simplifications à divers endroits ainsi que par un style d'écriture d'avantage
+orienté objet.
+
+
+\begin{figure}[htbp]
+   \begin{center}
+      \includegraphics[width=10cm]{IMG_1011.jpg}
+   \end{center}
+   \caption{\footnotesize Image d'entrée.} \label{fig:orig}
+\end{figure}
+
+\vspace{0.5cm}
+La réalisation de ce projet s'est déroulé en plusieurs étapes:
+\begin{itemize}
+\item Lecture du papier de David Lowe.
+\item Analyse de l'implémentation Feat.
+\item Développement d'une implémentation ``standard'' (sans CUDA).
+\item Mise en parallèle de certains calculs via CUDA.
+\end{itemize}
+
+\vspace{0.5cm} Le binaire généré par le projet teste l'image d'entrée dans les
+mêmes conditions (nombre d'octave, d'échelle, \ldots) que la binaire de Feat
+afin que les résultats puissent être comparable. Le résultat des deux
+implémentations est relativement similaire (quoique légèrement différent, ceci
+est lié entre autre à l'utilisation de \texttt{double} dans cette
+implémentation et de \texttt{float} dans Feat).
+
+
+Pour compiler le projet, il est nécessaire de la placer dans le dossier
+\texttt{projects} du SDK de CUDA. Taper la commande \texttt{make} permets
+ensuite de générer un binaire nommé \texttt{cusift} dans le dossier
+\texttt{bin} du SDK.
+
+Deux variables d'environnement permettent de modifier la compilation du programme:
+\begin{itemize}
+\item \texttt{emu} : permerts d'émuler CUDA (afin de pouvoir executer les
+  programmes sur une ordinateur ne possédant pas de carte graphique compatible
+  CUDA).
+\item \texttt{dbg} : mode de débuggage (sortie verbeuse, toutes les images
+  intermédiaire sont générées, pas d'optimisation au niveau du compilateur).
+\end{itemize}
+
+\newpage
+\section{SIFT}
+
+L'implémentation suit la procédure décrite par David Lowe:
+\begin{itemize}
+\item Création d'une pyramide d'images.
+\item Détection des extrema (puis rejet de certains).
+\item Calcul de l'orienation et du descripteur.
+\end{itemize}
+
+\subsection{Création d'une pyramide d'images}
+
+La première étape consiste en la création d'images de plus en plus floutées
+afin de couvrir le ``scape space'' (ce qui permets d'être invariant aux
+changements d'échelles).
+
+Cette série d'image est décomposée en octave et en échelle (``scale'').  On
+passe d'une octave à une autre en sous-échantillonant une image de l'octave
+précédente.
+Dans une octave, on passe d'une échelle à une autre en convoluant l'image par
+une gaussienne.
+
+
+On obtient donc des images de plus en plus petites, de plus en plus floues
+comme le montre la \autoref{fig:pyr} et la \autoref{fig:pyr2}.  Une fois ces
+images calculées, on les soustrait deux par deux (``Difference of Gaussians''),
+le résultat est illustré par la \autoref{fig:dog}.
+
+\begin{figure}[htbp]
+   \begin{center}
+      \includegraphics[width=10cm]{octave_1_3.png}
+   \end{center}
+   \caption{\footnotesize Octave 1, échelle 3.} \label{fig:pyr}
+\end{figure}
+
+\begin{figure}[htbp]
+   \begin{center}
+      \includegraphics[width=5cm]{octave_3_0.png}
+   \end{center}
+   \caption{\footnotesize Octave 3, échelle 0.} \label{fig:pyr2}
+\end{figure}
+
+\begin{figure}[htbp]
+   \begin{center}
+      \includegraphics[width=10cm]{dog.png}
+   \end{center}
+   \caption{\footnotesize Différence de gaussiennes (octave 2, échelle 1).} \label{fig:dog}
+\end{figure}
+
+\subsection{Détection des extrema, calcul de l'orientation et des descripteurs}
+
+La détection des extrema se fait en comparant chaque point à ses voisins (y
+compris aux échelles inférieures et supérieures). Il s'en suit une seconde
+passe permettant de supprimer les points non-significatifs. L'orientation de
+chaque point est ensuite calculé afin de générer des points d'intérêt
+non-sensible à la rotation, puis le descripteur complet est construit.
+
+Le résultat final est illustré par la \autoref{fig:res} (la taille des ronds
+est proportionnel à l'échelle associé au point, le rayon indique
+l'orientation).
+
+
+\begin{figure}[htbp]
+   \begin{center}
+      \includegraphics[width=10cm]{res.png}
+   \end{center}
+   \caption{\footnotesize Résultat final.} \label{fig:res}
+\end{figure}
+
+
+\section{CUDA}
+
+SIFT est un algorithme qui peut être facilement paralléliser dans la mesure où
+chaque étape du calcul prends en entrée une ou plusieurs images et en calcule
+une nouvelle. De plus, de nombreux calculs sont réalisé pour chaque
+octave/échelle de manière indépendante, il est donc envisageable de lancer un
+thread par échelle et réaliser l'ensemble de ces calculs en parallèle.
+
+La \autoref{fig:cuda} illustre ce principe via la parallélisation du calcul des
+différences de gaussiennes. Le schéma est toujours le même:
+\begin{itemize}
+\item Allocation de mémoire sur la carte graphique.
+\item Copie des données nécessaires vers la carte graphique.
+\item Déroulement de l'algorithme modifié.
+\item Copie du résultat de la carte graphique vers la mémoire principale.
+\item Libération de la mémoire de la carte graphique.
+\end{itemize}
+
+Dans cet exemple, chaque échelle et chaque ligne de l'image est calculée
+séparament en parallèle.
+
+
+Parmi les optimisations que l'on pourrait réaliser, deux pourraient augmenter
+de manière significatives les performances: tout d'abord éviter d'allouer et
+libérer en permanence la mémoire. Il faudrait mieux allouer l'ensemble de
+l'espace nécessaire à l'initialisation et tout libérer à la fin. Le seul défaut
+de cette méthode est que cela nécessite beaucoup de mémoire dans la carte
+graphique. D'autre part, il serait souhaitable de rendre certains appels
+asynchrones car l'ensemble d'une étape n'est pas forcément nécessaire pour
+calculer l'étape suivante. En particulier, les dernières octaves peuvent être
+calculées très rapidement car la taille de celles-ci est très inférieure à
+celle de l'octave minimum calculée.
+
+
+\begin{figure}[htbp]
+  \begin{center}
+\begin{verbatim}
+__global__ void
+compute_dog_row (double* dev_dog, double* dev_oct, int w, int h, int s_min)
+{
+  const int s  = s_min + threadIdx.x;
+  double* pt = dev_dog + (s-s_min)*w*h + w*blockIdx.x;
+  double* src_a = dev_oct + (s-s_min)*w*h + w*blockIdx.x;
+  double* src_b = dev_oct + (s-s_min+1)*w*h + w*blockIdx.x;
+  double* end_a = src_a + w;
+  while (src_a != end_a)
+    *pt++ = *src_b++ - *src_a++;
+}
+
+void
+Sift::compute_dog ()
+{
+  double* dev_dog = d_malloc<double> (s*(s_max-s_min));
+  double* dev_oct = d_malloc<double> (s*(s_max-s_min+1));
+
+  cudaMemcpy (dev_oct, octave_, s*(s_max-s_min+1), cudaMemcpyHostToDevice);
+  compute_dog_row<<<oH_, s_max - s_min>>> (dev_dog, dev_oct, oW_, oH_, s_min);
+  cudaMemcpy (dog_, dev_dog, s*(s_max-s_min), cudaMemcpyDeviceToHost);
+
+  d_free (dev_oct);
+  d_free (dev_dog);
+}
+\end{verbatim}
+  \end{center}
+  \caption{\footnotesize La méthode ``compute\_dog()'' (CUDA).} \label{fig:cuda}
+\end{figure}
+
+\section{Conclusion et bilan}
+
+Le développement de cette implémentation a été totalement finie (bien que
+l'ensemble du programme n'utilise pas CUDA) ce qui est un point positif.
+
+
+Ce point est d'autant plus appréciable que le compilateur de nVidia est encore
+relativement instable et de nombreux problèmes sont apparus lors du développement:
+\begin{itemize}
+\item \texttt{Internal Compiler Error}
+\item Comportement différent des compilateurs de C/C++ classique dans certains cas.
+\item Débugage ardu (lié à la complexité de SIFT d'une part et au manque
+  d'outils d'autre part).
+\item Difficulté d'accès à du matériel compatible CUDA.
+\end{itemize}
+
+
+Quant à CUDA, si cette technologie est clairement une avancée, la gestion de la
+mémoire est difficile et des performances maximales nécessite une connaissance
+approfondie du comportement de la bibliothèque. La manipulation de nombreux
+pointeurs rends également le code difficilement maintenable (par exemple le
+typage ne différencie pas la mémoire GPU de la mémoire CPU).
+
+
+\end{document}
